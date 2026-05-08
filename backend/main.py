@@ -92,6 +92,7 @@ async def get_teams(league_code: str):
         resp = await client.get(
             f"{FD_BASE}/competitions/{league_code}/teams",
             headers=FD_HEADERS,
+            params={"season": 2025},
         )
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code, detail="football-data.org error")
@@ -116,6 +117,7 @@ async def get_squad(team_id: int, league_code: str = "PL", days_since_last_match
         resp = await client.get(
             f"{FD_BASE}/teams/{team_id}",
             headers=FD_HEADERS,
+            params={"season": 2025},
         )
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code, detail="football-data.org error")
@@ -208,18 +210,29 @@ async def recommend(req: RecommendRequest):
         manager_intent=req.manager_intent,
         days_since_last_match=req.days_since_last_match,
     )
-    # Serialise — remove nested dicts for clean JSON
-    return [
-        {
-            "subOff": {k: v for k, v in r["subOff"].items() if k != "stamina_colour"},
-            "subOn": {k: v for k, v in r["subOn"].items() if k != "stamina_colour"},
-            "stamina_pct": r["stamina_pct"],
-            "impact_score": r["impact_score"],
-            "position_valid": r["position_valid"],
-            "reasoning": r["reasoning"],
-        }
-        for r in recs
-    ]
+    # Filter to stamina < 65 only, serialise cleanly
+    EXCLUDE = {"stamina_colour"}
+    result = []
+    for r in recs:
+        if r["stamina_pct"] >= 65:
+            continue
+        stamina = r["stamina_pct"]
+        pos_valid = r["position_valid"]
+        confidence = (
+            "HIGH"   if stamina < 45 and pos_valid else
+            "MEDIUM" if stamina < 65 and pos_valid else
+            "LOW"
+        )
+        result.append({
+            "subOff":         {k: v for k, v in r["subOff"].items() if k not in EXCLUDE},
+            "subOn":          {k: v for k, v in r["subOn"].items()  if k not in EXCLUDE},
+            "stamina_pct":    stamina,
+            "impact_score":   r["impact_score"],
+            "position_valid": pos_valid,
+            "reasoning":      r["reasoning"],
+            "confidence":     confidence,
+        })
+    return result
 
 
 @app.post("/api/scenarios")

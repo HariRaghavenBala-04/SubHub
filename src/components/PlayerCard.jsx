@@ -1,157 +1,131 @@
-import { useMemo } from 'react'
+/**
+ * PlayerCard — glassmorphism card used on pitch and bench.
+ * Stateless display only; drag wiring is handled by the parent via useDraggable.
+ *
+ * Props:
+ *  player      : { name, position, stamina_pct, impact_score }
+ *  size        : 'normal' | 'small'
+ *  highlight   : 'none' | 'red' | 'green'
+ *  isInjured   : bool — shows red ✕ overlay
+ *  isFlash     : bool — one-shot green flash after swap
+ *  dragHandleProps : spread onto the card (listeners + attributes from useDraggable)
+ *  onClick     : fn
+ *  style       : extra CSS
+ */
+import { staminaColour } from '../utils/football'
 
-const RADIUS = 16
+const RADIUS = 15
 const CIRC   = 2 * Math.PI * RADIUS
 
-function staminaColour(pct) {
-  if (pct >= 70) return 'var(--green)'
-  if (pct >= 40) return 'var(--amber)'
-  return 'var(--red)'
-}
-
-/**
- * Props:
- *  player       : { id, name, position, stamina_pct, impact_score }
- *  size         : 'normal' | 'small'
- *  highlight    : 'none' | 'red' | 'green'
- *  onClick      : fn
- *  style        : extra CSS
- */
 export default function PlayerCard({
   player,
-  size = 'normal',
-  highlight = 'none',
+  size        = 'normal',
+  highlight   = 'none',
+  isInjured   = false,
+  dragHandleProps = {},
   onClick,
-  style = {},
+  style       = {},
 }) {
   if (!player) return null
   const { name, position, stamina_pct = 80, impact_score = 50 } = player
-  const colour = staminaColour(stamina_pct)
+
+  const colour     = staminaColour(stamina_pct)
   const dashOffset = CIRC - (CIRC * Math.min(impact_score, 100)) / 100
 
-  const isSmall   = size === 'small'
-  const cardW     = isSmall ? 72 : 90
-  const cardH     = isSmall ? 88 : 108
-  const fontSize  = isSmall ? 9  : 11
-  const nameFz    = isSmall ? 8  : 10
+  const isSmall = size === 'small'
+  const W = isSmall ? 72 : 88
+  const H = isSmall ? 86 : 104
 
-  const hlClass = highlight === 'red'
-    ? 'pulse-red'
-    : highlight === 'green'
-    ? 'pulse-green'
-    : ''
+  const border =
+    highlight === 'red'   ? '1.5px solid rgba(255,61,61,0.8)' :
+    highlight === 'green' ? '1.5px solid rgba(0,255,135,0.8)' :
+    isInjured             ? '1.5px solid rgba(255,61,61,0.6)' :
+                            '1px solid rgba(255,255,255,0.09)'
 
-  const borderStyle = highlight === 'red'
-    ? '1px solid rgba(255,61,61,0.7)'
-    : highlight === 'green'
-    ? '1px solid rgba(0,255,135,0.7)'
-    : '1px solid rgba(255,255,255,0.1)'
+  const hlClass =
+    highlight === 'red'   ? 'pulse-red' :
+    highlight === 'green' ? 'pulse-green' : ''
 
   return (
     <div
-      className={`glass flex flex-col items-center justify-between cursor-pointer select-none ${hlClass}`}
+      className={`glass ${hlClass}`}
       onClick={onClick}
       style={{
-        width: cardW,
-        height: cardH,
-        padding: isSmall ? '4px 5px' : '6px 7px',
-        border: borderStyle,
+        width: W, height: H,
+        padding: isSmall ? '4px 5px 3px' : '5px 6px 4px',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'space-between',
+        cursor: 'grab',
         position: 'relative',
+        border,
+        userSelect: 'none',
         ...style,
       }}
+      {...dragHandleProps}
     >
+      {/* Injured overlay */}
+      {isInjured && (
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: 9,
+          background: 'rgba(255,61,61,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 5,
+        }}>
+          <span style={{ fontSize: 26, filter: 'drop-shadow(0 0 4px red)' }}>🚑</span>
+        </div>
+      )}
+
       {/* Position badge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 4,
-          left: 5,
-          background: 'rgba(0,255,135,0.15)',
-          border: '1px solid rgba(0,255,135,0.4)',
-          borderRadius: 4,
-          padding: '0 4px',
-          fontSize: fontSize - 1,
-          color: 'var(--green)',
-          fontFamily: 'Rajdhani, sans-serif',
-          fontWeight: 700,
-          lineHeight: '16px',
-        }}
-      >
+      <div style={{
+        position: 'absolute', top: 3, left: 4,
+        background: 'rgba(0,255,135,0.12)', border: '1px solid rgba(0,255,135,0.35)',
+        borderRadius: 3, padding: '0 3px',
+        fontSize: isSmall ? 8 : 9,
+        color: 'var(--green)', fontFamily: 'Rajdhani', fontWeight: 700,
+        lineHeight: '14px',
+      }}>
         {position}
       </div>
 
-      {/* Impact ring (SVG) */}
+      {/* Impact ring */}
       <svg
-        width={isSmall ? 38 : 46}
-        height={isSmall ? 38 : 46}
-        viewBox="0 0 40 40"
-        style={{ marginTop: isSmall ? 10 : 14, flexShrink: 0 }}
+        width={isSmall ? 36 : 42} height={isSmall ? 36 : 42}
+        viewBox="0 0 34 34"
+        style={{ marginTop: isSmall ? 11 : 13, flexShrink: 0 }}
       >
-        <circle cx="20" cy="20" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
+        <circle cx="17" cy="17" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="2.5" />
         <circle
-          cx="20" cy="20" r={RADIUS}
-          fill="none"
-          stroke={colour}
-          strokeWidth="3"
-          strokeDasharray={CIRC}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          transform="rotate(-90 20 20)"
+          cx="17" cy="17" r={RADIUS} fill="none"
+          stroke={colour} strokeWidth="2.5"
+          strokeDasharray={CIRC} strokeDashoffset={dashOffset}
+          strokeLinecap="round" transform="rotate(-90 17 17)"
           style={{ transition: 'stroke-dashoffset 0.5s ease' }}
         />
-        <text
-          x="20" y="20"
-          textAnchor="middle"
-          dominantBaseline="central"
+        <text x="17" y="17" textAnchor="middle" dominantBaseline="central"
           fill="var(--text)"
-          style={{ fontSize: isSmall ? 9 : 10, fontFamily: 'Rajdhani, sans-serif', fontWeight: 700 }}
-        >
+          style={{ fontSize: isSmall ? 8 : 9, fontFamily: 'Rajdhani', fontWeight: 700 }}>
           {Math.round(impact_score)}
         </text>
       </svg>
 
-      {/* Name */}
-      <div
-        style={{
-          fontSize: nameFz,
-          color: 'var(--text)',
-          textAlign: 'center',
-          fontFamily: 'DM Sans, sans-serif',
-          fontWeight: 500,
-          lineHeight: 1.2,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '100%',
-          padding: '0 2px',
-        }}
-        title={name}
-      >
-        {name.split(' ').pop()}
+      {/* Last name */}
+      <div style={{
+        fontSize: isSmall ? 8 : 9, color: 'var(--text)',
+        textAlign: 'center', fontFamily: 'DM Sans', fontWeight: 500,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        maxWidth: '100%', padding: '0 2px', lineHeight: 1.2,
+      }} title={name}>
+        {name?.split(' ').pop() ?? name}
       </div>
 
       {/* Stamina bar */}
-      <div
-        style={{
-          width: '100%',
-          height: 4,
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: 2,
-          overflow: 'hidden',
-          marginTop: 2,
-        }}
-      >
-        <div
-          style={{
-            width: `${stamina_pct}%`,
-            height: '100%',
-            background: colour,
-            borderRadius: 2,
-            transition: 'width 0.5s ease, background 0.3s',
-          }}
-        />
+      <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          width: `${stamina_pct}%`, height: '100%', background: colour, borderRadius: 2,
+          transition: 'width 0.5s ease, background 0.3s',
+        }} />
       </div>
-      <div style={{ fontSize: 7, color: 'var(--muted)', marginTop: 1 }}>
+      <div style={{ fontSize: 6.5, color: 'var(--muted)', marginTop: 1 }}>
         {Math.round(stamina_pct)}% sta
       </div>
     </div>

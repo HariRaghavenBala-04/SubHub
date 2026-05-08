@@ -1,117 +1,158 @@
-import { useRef, useEffect, useState } from 'react'
+/**
+ * FIFA 15-style football pitch with droppable slots.
+ * Each position slot is a useDroppable zone.
+ * Each player card is wrapped with useDraggable.
+ */
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import PlayerCard from './PlayerCard'
 import FormationLines from './FormationLines'
 
 /**
- * FIFA 15-style pitch with player cards at absolute % positions.
- *
  * Props:
- *  players          : array of player objects enriched with stamina_pct
- *  formation        : FORMATIONS[key].positions array
- *  highlightOffId   : player id to pulse red
- *  highlightOnId    : not used here (bench highlights in BenchRow)
+ *  pitchPlayers     : array[11] of player objects (enriched with stamina_pct)
+ *  formation        : array[11] of { slot, left, top }
+ *  highlightOffId   : player id to pulse red (pending sub-off)
+ *  swapFlashIdx     : pitch index to flash green briefly after swap
  *  onPlayerClick    : fn(player)
- *  subArrow         : { from: {left,top}, to: {left,top} } | null
+ *  subArrow         : { fromLeft, fromTop, toLeft, toTop } | null
  */
 export default function Pitch({
-  players = [],
-  formation = [],
+  pitchPlayers = [],
+  formation    = [],
   highlightOffId,
+  swapFlashIdx,
   onPlayerClick,
   subArrow,
 }) {
-  const pitchRef = useRef(null)
-  const [dims, setDims] = useState({ w: 500, h: 700 })
-
-  useEffect(() => {
-    const obs = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      setDims({ w: width, h: height })
-    })
-    if (pitchRef.current) obs.observe(pitchRef.current)
-    return () => obs.disconnect()
-  }, [])
-
-  // Merge formation slots with players
+  // Merge formation coords with players, pass stamina to line renderer
   const positioned = formation.map((slot, i) => ({
     ...slot,
-    player: players[i] || null,
-    stamina_pct: players[i]?.stamina_pct ?? 80,
+    stamina_pct: pitchPlayers[i]?.stamina_pct ?? 80,
+    player: pitchPlayers[i] ?? null,
   }))
 
   return (
-    <div
-      ref={pitchRef}
-      style={{
-        position: 'relative',
-        width: '100%',
-        flex: 1,
-        minHeight: 400,
-        borderRadius: 8,
-        overflow: 'hidden',
-        border: '2px solid rgba(255,255,255,0.12)',
-      }}
-    >
-      {/* Pitch stripes */}
+    <div style={{
+      position: 'relative', width: '100%', flex: 1, minHeight: 420,
+      borderRadius: 8, overflow: 'hidden',
+      border: '2px solid rgba(255,255,255,0.1)',
+    }}>
       <PitchStripes />
-
-      {/* Pitch markings */}
       <PitchMarkings />
 
-      {/* Formation connection lines */}
-      <FormationLines
-        players={positioned}
-        pitchW={dims.w}
-        pitchH={dims.h}
-      />
+      {/* Formation connection lines — clipped inside pitch */}
+      <FormationLines players={positioned} />
 
-      {/* Sub arrow overlay */}
-      {subArrow && (
-        <SubArrow
-          from={subArrow.from}
-          to={subArrow.to}
-          pitchW={dims.w}
-          pitchH={dims.h}
-        />
-      )}
+      {/* Sub arrow */}
+      {subArrow && <SubArrow {...subArrow} />}
 
-      {/* Player cards */}
+      {/* Player slots */}
       {positioned.map((pos, i) => (
-        <div
+        <PitchSlot
           key={i}
-          style={{
-            position: 'absolute',
-            left: `${pos.left}%`,
-            top:  `${pos.top}%`,
-            transform: 'translate(-50%, -50%)',
-            transition: 'left 0.4s ease, top 0.4s ease',
-            zIndex: 10,
-          }}
-        >
-          <PlayerCard
-            player={pos.player || { name: pos.slot, position: pos.slot, stamina_pct: 80, impact_score: 50 }}
-            size="normal"
-            highlight={pos.player?.id === highlightOffId ? 'red' : 'none'}
-            onClick={() => pos.player && onPlayerClick?.(pos.player)}
-          />
-        </div>
+          index={i}
+          left={pos.left}
+          top={pos.top}
+          slot={pos.slot}
+          player={pos.player}
+          isHighlightOff={pos.player?.id === highlightOffId}
+          isFlash={swapFlashIdx === i}
+          onPlayerClick={onPlayerClick}
+        />
       ))}
     </div>
   )
 }
 
+// ── Individual droppable + draggable pitch slot ───────────────────────────
+
+function PitchSlot({ index, left, top, slot, player, isHighlightOff, isFlash, onPlayerClick }) {
+  const { setNodeRef: dropRef, isOver } = useDroppable({ id: `pitch-${index}` })
+
+  return (
+    <div
+      ref={dropRef}
+      style={{
+        position: 'absolute',
+        left: `${left}%`, top: `${top}%`,
+        transform: 'translate(-50%, -50%)',
+        transition: 'left 0.4s ease, top 0.4s ease',
+        zIndex: isOver ? 20 : 10,
+      }}
+    >
+      {/* Drop target highlight when hovering */}
+      {isOver && (
+        <div style={{
+          position: 'absolute', inset: -6, borderRadius: 14,
+          border: '2px dashed rgba(0,255,135,0.7)',
+          background: 'rgba(0,255,135,0.08)',
+          pointerEvents: 'none', zIndex: -1,
+        }} />
+      )}
+      {player ? (
+        <DraggableCard
+          player={player}
+          id={`pitch-player-${index}`}
+          from="pitch"
+          fromIndex={index}
+          highlight={isHighlightOff ? 'red' : isFlash ? 'green' : 'none'}
+          onClick={() => onPlayerClick?.(player)}
+        />
+      ) : (
+        <EmptySlot label={slot} />
+      )}
+    </div>
+  )
+}
+
+// ── Draggable card wrapper ────────────────────────────────────────────────
+
+export function DraggableCard({ player, id, from, fromIndex, size = 'normal', highlight = 'none', onClick }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id,
+    data: { from, fromIndex, player, size },
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.25 : 1, transition: 'opacity 0.15s' }}
+    >
+      <PlayerCard
+        player={player}
+        size={size}
+        highlight={highlight}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        onClick={onClick}
+      />
+    </div>
+  )
+}
+
+// ── Empty slot placeholder ─────────────────────────────────────────────────
+
+function EmptySlot({ label }) {
+  return (
+    <div style={{
+      width: 88, height: 104,
+      border: '1.5px dashed rgba(255,255,255,0.15)',
+      borderRadius: 10, display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      color: 'var(--muted)', fontSize: 11,
+      fontFamily: 'Rajdhani', fontWeight: 600,
+    }}>
+      {label}
+    </div>
+  )
+}
+
+// ── Pitch graphics ────────────────────────────────────────────────────────
+
 function PitchStripes() {
-  const stripes = Array.from({ length: 10 }, (_, i) => i)
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
-      {stripes.map(i => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            background: i % 2 === 0 ? 'var(--pitch-dark)' : 'var(--pitch-light)',
-          }}
-        />
+      {Array.from({ length: 10 }, (_, i) => (
+        <div key={i} style={{ flex: 1, background: i % 2 === 0 ? 'var(--pitch-dark)' : 'var(--pitch-light)' }} />
       ))}
     </div>
   )
@@ -119,59 +160,39 @@ function PitchStripes() {
 
 function PitchMarkings() {
   return (
-    <svg
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }}
-      viewBox="0 0 100 140"
-      preserveAspectRatio="none"
-    >
-      {/* Outer border */}
-      <rect x="2" y="2" width="96" height="136" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.4" />
-      {/* Halfway line */}
-      <line x1="2" y1="70" x2="98" y2="70" stroke="rgba(255,255,255,0.25)" strokeWidth="0.4" />
-      {/* Centre circle */}
-      <circle cx="50" cy="70" r="12" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" />
-      <circle cx="50" cy="70" r="0.6" fill="rgba(255,255,255,0.4)" />
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }}
+      viewBox="0 0 100 140" preserveAspectRatio="none">
+      <rect x="2" y="2" width="96" height="136" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="0.4" />
+      <line x1="2" y1="70" x2="98" y2="70" stroke="rgba(255,255,255,0.22)" strokeWidth="0.4" />
+      <circle cx="50" cy="70" r="12" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" />
+      <circle cx="50" cy="70" r="0.6" fill="rgba(255,255,255,0.5)" />
       {/* Top penalty box */}
-      <rect x="22" y="2" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" />
-      {/* Top 6-yard box */}
-      <rect x="34" y="2" width="32" height="8" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
-      {/* Top penalty spot */}
+      <rect x="22" y="2" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" />
+      <rect x="34" y="2" width="32" height="8"  fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
       <circle cx="50" cy="16" r="0.6" fill="rgba(255,255,255,0.4)" />
-      {/* Top penalty arc */}
-      <path d="M 38 24 A 12 12 0 0 0 62 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" />
+      <path d="M 38 24 A 12 12 0 0 0 62 24" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" />
       {/* Bottom penalty box */}
-      <rect x="22" y="116" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" />
-      {/* Bottom 6-yard box */}
-      <rect x="34" y="130" width="32" height="8" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
-      {/* Bottom penalty spot */}
+      <rect x="22" y="116" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" />
+      <rect x="34" y="130" width="32" height="8"  fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
       <circle cx="50" cy="124" r="0.6" fill="rgba(255,255,255,0.4)" />
-      {/* Bottom penalty arc */}
-      <path d="M 38 116 A 12 12 0 0 1 62 116" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" />
+      <path d="M 38 116 A 12 12 0 0 1 62 116" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" />
     </svg>
   )
 }
 
-function SubArrow({ from, to, pitchW, pitchH }) {
-  const x1 = (from.left / 100) * pitchW
-  const y1 = (from.top  / 100) * pitchH
-  const x2 = (to.left   / 100) * pitchW
-  const y2 = (to.top    / 100) * pitchH
-
+function SubArrow({ fromLeft, fromTop, toLeft, toTop }) {
   return (
-    <svg
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}
-    >
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
       <defs>
-        <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L8,3 z" fill="var(--green)" />
+        <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L7,3 z" fill="var(--green)" />
         </marker>
       </defs>
       <line
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke="var(--green)"
-        strokeWidth="2"
-        strokeDasharray="8 4"
-        markerEnd="url(#arrowhead)"
+        x1={`${fromLeft}%`} y1={`${fromTop}%`}
+        x2={`${toLeft}%`}   y2={`${toTop}%`}
+        stroke="var(--green)" strokeWidth="2"
+        strokeDasharray="8 4" markerEnd="url(#arr)"
         style={{ animation: 'dashFlow 0.8s linear infinite' }}
       />
     </svg>

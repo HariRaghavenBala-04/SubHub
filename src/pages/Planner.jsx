@@ -1,225 +1,532 @@
-import { useState, useCallback } from 'react'
-import { MOCK_XI, MOCK_BENCH } from '../data/mockPlayers'
+import { useState, useMemo, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { useTeam } from '../context/TeamContext'
+import {
+  computeStamina, staminaColour, isValidCover,
+  URGENCY, FORMATION_SUGGESTIONS, confidenceLevel, computeClientRecs,
+} from '../utils/football'
 
-const DECAY_RATES = { GK:0.20, CB:0.30, FB:0.35, LB:0.35, RB:0.35, DM:0.40, CM:0.45, W:0.55, LW:0.55, RW:0.55, AM:0.50, ST:0.60, SS:0.55 }
-
-function computeStamina(pos, min) {
-  return Math.max(0, Math.round(100 - (DECAY_RATES[pos?.toUpperCase()] ?? 0.45) * min))
-}
-
-function staminaColour(pct) {
-  if (pct >= 70) return 'var(--green)'
-  if (pct >= 40) return 'var(--amber)'
-  return 'var(--red)'
-}
-
-const SCENARIOS = [
-  { key: 'WINNING', label: 'Winning',  icon: '🏆', intent: 'protect_lead' },
-  { key: 'DRAWING', label: 'Drawing',  icon: '⚖️',  intent: 'tactical' },
-  { key: 'LOSING',  label: 'Losing',   icon: '⬇️',  intent: 'chase_game' },
-]
+// ── Top-level ─────────────────────────────────────────────────────────────
 
 export default function Planner() {
+  const { selectedTeam, fetchSquad } = useTeam()
+  const [tab, setTab] = useState('injury')   // 'injury' | 'scenario'
+  const [xi, setXi]   = useState([])
+  const [bench, setBench] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError]    = useState(null)
+
+  useEffect(() => {
+    if (!selectedTeam) return
+    setLoading(true)
+    fetchSquad(selectedTeam.id, selectedTeam.leagueCode)
+      .then(data => { setXi(data.xi ?? []); setBench(data.bench ?? []); setLoading(false) })
+      .catch(e => { setError(e.message); setLoading(false) })
+  }, [selectedTeam?.id])
+
+  if (!selectedTeam) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 52px)', gap: 14 }}>
+        <span style={{ fontSize: 40 }}>📋</span>
+        <h2 style={{ fontFamily: 'Rajdhani', fontSize: 26, color: 'var(--text)', margin: 0 }}>No team selected</h2>
+        <p style={{ color: 'var(--muted)', margin: 0 }}>Select a team first to use the planner.</p>
+        <Link to="/" style={{ background: 'var(--green)', color: '#000', padding: '10px 24px', borderRadius: 6, textDecoration: 'none', fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14 }}>
+          ← Select a Team
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <main style={{ padding: '28px 28px', maxWidth: 1150, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
+        {selectedTeam.crestUrl && (
+          <img src={selectedTeam.crestUrl} alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+        )}
+        <h1 style={{ fontFamily: 'Rajdhani', fontSize: 30, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+          {selectedTeam.name} — Planner
+        </h1>
+      </div>
+
+      {loading && <div style={{ color: 'var(--muted)', padding: 40, textAlign: 'center' }}>Loading squad…</div>}
+      {error && <div style={{ color: 'var(--amber)', background: 'rgba(255,184,0,0.06)', padding: '10px 14px', borderRadius: 6, marginBottom: 16 }}>{error}</div>}
+
+      {!loading && xi.length > 0 && (
+        <>
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', gap: 0, marginBottom: 22, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            {[
+              { key: 'injury',   label: '🚑 Injury Management' },
+              { key: 'scenario', label: '📊 Scenario Planner'  },
+            ].map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                background: 'none', border: 'none',
+                borderBottom: tab === t.key ? '2px solid var(--green)' : '2px solid transparent',
+                color: tab === t.key ? 'var(--green)' : 'var(--muted)',
+                fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15,
+                padding: '8px 20px', cursor: 'pointer',
+                letterSpacing: '0.06em', transition: 'color 0.15s',
+                marginBottom: -1,
+              }}>{t.label}</button>
+            ))}
+          </div>
+
+          {tab === 'injury'   && <InjuryTab   xi={xi} bench={bench} />}
+          {tab === 'scenario' && <ScenarioTab xi={xi} bench={bench} />}
+        </>
+      )}
+    </main>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 1 — INJURY MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+function InjuryTab({ xi, bench }) {
+  const [injuredIds, setInjuredIds] = useState(new Set())
+  const [minute, setMinute]         = useState(60)
+
+  const enriched = useMemo(() =>
+    xi.map(p => ({ ...p, stamina_pct: computeStamina(p.position, minute) })),
+    [xi, minute]
+  )
+
+  function toggleInjury(id) {
+    setInjuredIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div>
+      {/* Minute slider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <span style={{ fontFamily: 'Rajdhani', fontWeight: 600, fontSize: 13, color: 'var(--muted)' }}>Match minute:</span>
+        <input type="range" min={1} max={90} value={minute}
+          onChange={e => setMinute(Number(e.target.value))}
+          style={{ width: 140, accentColor: 'var(--green)' }} />
+        <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15, color: 'var(--text)', minWidth: 32 }}>{minute}'</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
+        {enriched.map(player => (
+          <InjuryCard
+            key={player.id}
+            player={player}
+            injured={injuredIds.has(player.id)}
+            onToggleInjury={() => toggleInjury(player.id)}
+            bench={bench}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function InjuryCard({ player, injured, onToggleInjury, bench }) {
+  const urgency = URGENCY[player.position] ?? URGENCY.CM
+  const colour  = staminaColour(player.stamina_pct)
+
+  // Find best replacement
+  const replacement = useMemo(() => {
+    const directMatches = bench.filter(b =>
+      b.position?.toUpperCase() === player.position?.toUpperCase()
+    )
+    const coverMatches  = bench.filter(b =>
+      isValidCover(player.position, b.position) &&
+      b.position?.toUpperCase() !== player.position?.toUpperCase()
+    )
+    const candidates = [...directMatches, ...coverMatches]
+      .sort((a, b) => (b.impact_score ?? 0) - (a.impact_score ?? 0))
+    return candidates[0] ?? null
+  }, [bench, player.position])
+
+  const direct  = replacement?.position?.toUpperCase() === player.position?.toUpperCase()
+  const noSub   = !replacement
+
+  return (
+    <div
+      className="glass"
+      style={{
+        padding: '12px 14px',
+        border: injured
+          ? '1px solid rgba(255,61,61,0.4)'
+          : '1px solid rgba(255,255,255,0.07)',
+        transition: 'border-color 0.2s',
+      }}
+    >
+      {/* Player row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <PosBadge pos={player.position} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{player.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <div style={{ width: 72, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ width: `${player.stamina_pct}%`, height: '100%', background: colour }} />
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{player.stamina_pct}%</span>
+          </div>
+        </div>
+        <button
+          onClick={onToggleInjury}
+          style={{
+            background: injured ? 'rgba(255,61,61,0.15)' : 'rgba(255,255,255,0.05)',
+            border: injured ? '1px solid rgba(255,61,61,0.5)' : '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 6, padding: '5px 9px',
+            color: injured ? 'var(--red)' : 'var(--muted)',
+            fontSize: 13, cursor: 'pointer', fontFamily: 'Rajdhani', fontWeight: 700,
+            transition: 'all 0.15s',
+          }}
+        >
+          {injured ? '✕ Injured' : '🚑 Injure'}
+        </button>
+      </div>
+
+      {/* Injury panel */}
+      {injured && (
+        <div style={{
+          background: 'rgba(255,61,61,0.06)', borderRadius: 6,
+          border: '1px solid rgba(255,61,61,0.15)', padding: '10px 12px',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {/* Urgency */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: `${urgency.colour}15`,
+            border: `1px solid ${urgency.colour}50`,
+            borderRadius: 4, padding: '2px 8px',
+            color: urgency.colour, fontSize: 10,
+            fontFamily: 'Rajdhani', fontWeight: 700,
+            alignSelf: 'flex-start',
+          }}>
+            {urgency.label}
+          </div>
+
+          {noSub ? (
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 4 }}>
+                ✗ No direct or cover replacement on bench
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
+                💡 {FORMATION_SUGGESTIONS[player.position] ?? 'Consider a tactical adjustment.'}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--green)', marginBottom: 2 }}>
+                ✓ Best replacement available
+              </div>
+              <div style={{
+                background: 'rgba(0,255,135,0.06)', border: '1px solid rgba(0,255,135,0.15)',
+                borderRadius: 5, padding: '7px 10px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PosBadge pos={replacement.position} />
+                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{replacement.name}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--muted)' }}>
+                    Impact {replacement.impact_score ?? '—'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, fontStyle: 'italic' }}>
+                  {replacement.name?.split(' ').pop()} ({replacement.position}) → replaces {player.name?.split(' ').pop()} ({player.position})
+                  {direct
+                    ? ' — direct position match'
+                    : ` — cover role (${player.position}→${replacement.position})`
+                  }
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 2 — SCENARIO PLANNER
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SCENARIOS = [
+  { key: 'WINNING', label: 'Winning', icon: '🏆', colour: 'var(--green)', intent: 'protect_lead' },
+  { key: 'DRAWING', label: 'Drawing', icon: '⚖️',  colour: 'var(--amber)', intent: 'tactical'     },
+  { key: 'LOSING',  label: 'Losing',  icon: '⬇️',  colour: 'var(--red)',   intent: 'chase_game'   },
+]
+
+function ScenarioTab({ xi, bench }) {
   const [minute,   setMinute]   = useState(60)
   const [results,  setResults]  = useState(null)
-  const [loading,  setLoading]  = useState(false)
+  const [running,  setRunning]  = useState(false)
+  // Per-player "what if injured?" toggles
+  const [injuredSet, setInjuredSet] = useState(new Set())
 
-  const xi    = MOCK_XI.map(p => ({ ...p, minutes_played: minute, stamina_pct: computeStamina(p.position, minute) }))
-  const bench = MOCK_BENCH.map(p => ({ ...p, stamina_pct: 100 }))
+  const enrichedXi = useMemo(() =>
+    xi
+      .filter(p => !injuredSet.has(p.id))
+      .map(p => ({ ...p, minutes_played: minute, stamina_pct: computeStamina(p.position, minute) })),
+    [xi, minute, injuredSet]
+  )
 
-  const handleRun = useCallback(async () => {
-    setLoading(true)
+  async function runScenarios() {
+    setRunning(true)
     try {
       const res = await fetch('/api/scenarios', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ starting_xi: xi, bench, minute }),
+        body: JSON.stringify({ starting_xi: enrichedXi, bench, minute }),
       })
-      const data = await res.json()
-      setResults(data)
+      setResults(await res.json())
     } catch {
       // Client-side fallback
-      const VALID_COVER = {
-        ST:['ST','SS','W'], W:['W','AM','ST','FB'], AM:['AM','CM','W'],
-        CM:['CM','DM','AM'], DM:['DM','CM','CB'], FB:['FB','DM','W'],
-        CB:['CB','DM','FB'], GK:['GK'],
-        LW:['W','AM','ST','FB'], RW:['W','AM','ST','FB'],
-        LB:['FB','DM','W'], RB:['FB','DM','W'],
-      }
-      const makeRec = (off, on) => ({
-        subOff: off,
-        subOn:  on,
-        stamina_pct: off.stamina_pct,
-        impact_score: on.impact_score,
-        position_valid: (VALID_COVER[off.position?.toUpperCase()] ?? []).includes(on.position?.toUpperCase()),
-        reasoning: `${off.name.split(' ').pop()} → ${on.name.split(' ').pop()} (Impact: ${on.impact_score})`,
-      })
-      const sortedXi    = [...xi].sort((a, b) => a.stamina_pct - b.stamina_pct)
-      const sortedBench = [...bench].sort((a, b) => b.impact_score - a.impact_score)
       const fallback = {}
       for (const sc of SCENARIOS) {
+        const subs = computeClientRecs(enrichedXi, bench, sc.intent)
+        const avg  = subs.length ? subs.reduce((s, r) => s + r.impact_score, 0) / subs.length : 50
         fallback[sc.key] = {
           intent: sc.intent,
-          top2_subs: [makeRec(sortedXi[0], sortedBench[0]), makeRec(sortedXi[1], sortedBench[1])],
-          win_probability_delta: 0.06,
+          top2_subs: subs.slice(0, 2),
+          win_probability_delta: parseFloat((0.05 + 0.001 * avg).toFixed(4)),
         }
       }
       setResults(fallback)
     } finally {
-      setLoading(false)
+      setRunning(false)
     }
-  }, [xi, bench, minute])
+  }
+
+  function toggleInjured(id) {
+    setInjuredSet(prev => {
+      const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+    })
+  }
 
   return (
-    <main style={{ padding: '40px 32px', maxWidth: 1100, margin: '0 auto' }}>
-      <h1
-        style={{
-          fontFamily: 'Rajdhani, sans-serif',
-          fontSize: 34,
-          fontWeight: 800,
-          color: 'var(--text)',
-          letterSpacing: '0.05em',
-          marginBottom: 6,
-        }}
-      >
-        Scenario Planner
-      </h1>
-      <p style={{ color: 'var(--muted)', marginBottom: 32 }}>
-        Simulate substitution decisions across winning, drawing, and losing scenarios.
-      </p>
-
-      {/* Controls */}
-      <div className="glass" style={{ padding: '16px 20px', marginBottom: 24, display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 600, fontSize: 13, color: 'var(--muted)' }}>
-            MINUTE {minute}'
-          </span>
-          <input
-            type="range" min={1} max={100} value={minute}
+    <div>
+      {/* Controls row */}
+      <div className="glass" style={{ padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'Rajdhani', fontWeight: 600, fontSize: 13, color: 'var(--muted)' }}>Minute</span>
+          <input type="range" min={1} max={90} value={minute}
             onChange={e => setMinute(Number(e.target.value))}
-            style={{ width: 140, accentColor: 'var(--green)' }}
-          />
+            style={{ width: 130, accentColor: 'var(--green)' }} />
+          <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15, color: 'var(--text)', minWidth: 30 }}>{minute}'</span>
         </div>
-
-        <button
-          onClick={handleRun}
-          disabled={loading}
-          style={{
-            background: loading ? 'rgba(0,255,135,0.3)' : 'var(--green)',
-            color: '#000',
-            border: 'none',
-            borderRadius: 6,
-            fontFamily: 'Rajdhani, sans-serif',
-            fontWeight: 800,
-            fontSize: 15,
-            padding: '10px 28px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {loading ? 'Running…' : '⚡ Run Scenarios'}
+        <button onClick={runScenarios} disabled={running} style={{
+          background: running ? 'rgba(0,255,135,0.3)' : 'var(--green)',
+          color: '#000', border: 'none', borderRadius: 6,
+          fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 14,
+          padding: '9px 24px', cursor: running ? 'not-allowed' : 'pointer',
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>
+          {running ? 'Running…' : '⚡ Run Scenarios'}
         </button>
       </div>
 
-      {/* Squad overview */}
-      <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 16, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
-          Current XI — Stamina at {minute}'
-        </h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {/* "What if injured?" player grid */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: 'Rajdhani', fontSize: 13, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+          What if injured? (removes from XI for scenario calculation)
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {xi.map(p => (
-            <div
+            <button
               key={p.id}
-              className="glass"
-              style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8 }}
+              onClick={() => toggleInjured(p.id)}
+              style={{
+                background: injuredSet.has(p.id) ? 'rgba(255,61,61,0.15)' : 'rgba(255,255,255,0.04)',
+                border: injuredSet.has(p.id) ? '1px solid rgba(255,61,61,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 5, padding: '4px 10px',
+                color: injuredSet.has(p.id) ? 'var(--red)' : 'var(--muted)',
+                fontSize: 11, fontFamily: 'Rajdhani', fontWeight: 600,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
             >
-              <span style={{ fontSize: 10, fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, color: 'var(--green)', minWidth: 28 }}>{p.position}</span>
-              <span style={{ fontSize: 12, color: 'var(--text)' }}>{p.name.split(' ').pop()}</span>
-              <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+              {injuredSet.has(p.id) ? '✕ ' : ''}{p.name?.split(' ').pop()} ({p.position})
+            </button>
+          ))}
+        </div>
+        {injuredSet.size > 0 && (
+          <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 6 }}>
+            {injuredSet.size} player{injuredSet.size > 1 ? 's' : ''} excluded from scenarios
+          </div>
+        )}
+      </div>
+
+      {/* Scenario columns */}
+      {results && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+          {SCENARIOS.map(sc => (
+            <ScenarioColumn
+              key={sc.key}
+              sc={sc}
+              result={results[sc.key]}
+              xiAtMinute={enrichedXi}
+              bench={bench}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScenarioColumn({ sc, result, xiAtMinute, bench }) {
+  const [overrideId, setOverrideId] = useState('')
+  if (!result) return null
+
+  const delta = (result.win_probability_delta * 100).toFixed(1)
+  const overridePlayer = bench.find(b => String(b.id) === overrideId)
+
+  return (
+    <div className="glass" style={{ padding: '16px 14px', border: `1px solid ${sc.colour}22` }}>
+      {/* Column header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <span style={{ fontSize: 22 }}>{sc.icon}</span>
+        <div>
+          <div style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 17, color: sc.colour }}>{sc.label}</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{result.intent.replace('_', ' ')}</div>
+        </div>
+        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+          <div style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 20, color: sc.colour }}>+{delta}%</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)' }}>win Δ</div>
+        </div>
+      </div>
+
+      {/* Mini stamina list */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>XI Stamina at {xiAtMinute[0]?.minutes_played ?? 60}'</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px' }}>
+          {xiAtMinute.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 8, color: 'var(--muted)', minWidth: 24, fontFamily: 'Rajdhani', fontWeight: 600 }}>{p.position}</span>
+              <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ width: `${p.stamina_pct}%`, height: '100%', background: staminaColour(p.stamina_pct) }} />
               </div>
-              <span style={{ fontSize: 10, color: 'var(--muted)' }}>{p.stamina_pct}%</span>
+              <span style={{ fontSize: 8, color: 'var(--muted)', minWidth: 22 }}>{p.stamina_pct}%</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Scenario columns */}
-      {results && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-          {SCENARIOS.map(sc => {
-            const res = results[sc.key]
-            if (!res) return null
-            const delta = (res.win_probability_delta * 100).toFixed(1)
-            return (
-              <div
-                key={sc.key}
-                className="glass"
-                style={{ padding: '20px 16px', border: '1px solid rgba(255,255,255,0.08)' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                  <span style={{ fontSize: 24 }}>{sc.icon}</span>
-                  <div>
-                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>
-                      {sc.label}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{res.intent.replace('_', ' ')}</div>
-                  </div>
-                  <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 800, fontSize: 20, color: 'var(--green)' }}>
-                      +{delta}%
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>win Δ</div>
-                  </div>
-                </div>
-
-                {(res.top2_subs ?? []).map((sub, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      borderRadius: 8,
-                      padding: '10px 12px',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>
-                        <span style={{ color: 'var(--red)' }}>▼ {sub.subOff?.name?.split(' ').pop()}</span>
-                        {' → '}
-                        <span style={{ color: 'var(--green)' }}>▲ {sub.subOn?.name?.split(' ').pop()}</span>
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          background: sub.position_valid ? 'rgba(0,255,135,0.1)' : 'rgba(255,184,0,0.1)',
-                          border: `1px solid ${sub.position_valid ? 'rgba(0,255,135,0.3)' : 'rgba(255,184,0,0.3)'}`,
-                          color: sub.position_valid ? 'var(--green)' : 'var(--amber)',
-                          fontFamily: 'Rajdhani, sans-serif',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {sub.position_valid ? 'Valid' : 'Mismatch'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', fontStyle: 'italic' }}>
-                      {sub.reasoning}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                      <span style={{ fontSize: 10, color: 'var(--red)' }}>{sub.stamina_pct}% sta</span>
-                      <span style={{ fontSize: 10, color: 'var(--green)' }}>Impact {sub.impact_score}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          })}
+      {/* Top 2 subs */}
+      {(result.top2_subs ?? []).length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic', marginBottom: 10 }}>
+          No fatigued players at this minute.
         </div>
       )}
-    </main>
+      {(result.top2_subs ?? []).map((sub, i) => {
+        const conf = confidenceLevel(sub.stamina_pct, sub.position_valid)
+        return (
+          <div key={i} style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 7, padding: '9px 10px', marginBottom: 8,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                <span style={{ color: 'var(--red)' }}>▼ {sub.subOff?.name?.split(' ').pop()}</span>
+                <span style={{ color: 'var(--muted)', margin: '0 4px', fontSize: 10 }}>→</span>
+                <span style={{ color: 'var(--green)' }}>▲ {sub.subOn?.name?.split(' ').pop()}</span>
+              </span>
+              <ConfBadge level={conf} />
+            </div>
+            <div style={{ fontSize: 9.5, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.4 }}>
+              {sub.reasoning}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <span style={{ fontSize: 9, color: 'var(--red)' }}>{sub.stamina_pct}% sta</span>
+              <span style={{ fontSize: 9, color: 'var(--green)' }}>Impact {sub.impact_score}</span>
+              <span style={{ fontSize: 9, color: sub.position_valid ? 'var(--green)' : 'var(--amber)' }}>
+                {sub.position_valid ? '✓ valid' : '⚠ mismatch'}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Manual override */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+        <div style={{ fontSize: 9.5, color: 'var(--muted)', marginBottom: 5 }}>Force a specific sub instead:</div>
+        <select
+          value={overrideId}
+          onChange={e => setOverrideId(e.target.value)}
+          style={{
+            background: 'var(--bg-deep)', color: 'var(--text)',
+            border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5,
+            padding: '5px 8px', fontSize: 11, width: '100%', outline: 'none',
+          }}
+        >
+          <option value="">— Select bench player —</option>
+          {bench.map(b => (
+            <option key={b.id} value={b.id}>{b.name} ({b.position})</option>
+          ))}
+        </select>
+
+        {overridePlayer && (() => {
+          // Find lowest-stamina player in XI matching the override's cover
+          const targets = xiAtMinute
+            .filter(p => isValidCover(p.position, overridePlayer.position))
+            .sort((a, b) => a.stamina_pct - b.stamina_pct)
+          const target = targets[0]
+          const valid  = !!target
+          return (
+            <div style={{ marginTop: 6, fontSize: 10.5, lineHeight: 1.5 }}>
+              {valid ? (
+                <>
+                  <span style={{ color: 'var(--green)' }}>✓ {overridePlayer.position} can cover </span>
+                  <span style={{ color: 'var(--text)' }}>
+                    → suggested target: {target.name?.split(' ').pop()} ({target.position}, {target.stamina_pct}% sta)
+                  </span>
+                  <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>
+                    Impact comparison: Override={overridePlayer.impact_score ?? '—'} vs Rec={result.top2_subs?.[0]?.subOn?.impact_score ?? '—'}
+                  </div>
+                </>
+              ) : (
+                <span style={{ color: 'var(--amber)' }}>
+                  ⚠ No valid target for {overridePlayer.position} in this XI
+                </span>
+              )}
+            </div>
+          )
+        })()}
+      </div>
+    </div>
+  )
+}
+
+// ── Shared small components ────────────────────────────────────────────────
+
+function PosBadge({ pos }) {
+  return (
+    <span style={{
+      background: 'rgba(0,255,135,0.1)', border: '1px solid rgba(0,255,135,0.3)',
+      borderRadius: 4, padding: '1px 6px',
+      fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 700, color: 'var(--green)',
+      flexShrink: 0,
+    }}>
+      {pos}
+    </span>
+  )
+}
+
+function ConfBadge({ level }) {
+  const colours = {
+    HIGH:   { bg: 'rgba(0,255,135,0.1)',   border: 'rgba(0,255,135,0.4)',   color: 'var(--green)' },
+    MEDIUM: { bg: 'rgba(255,184,0,0.1)',   border: 'rgba(255,184,0,0.4)',   color: 'var(--amber)' },
+    LOW:    { bg: 'rgba(107,122,141,0.1)', border: 'rgba(107,122,141,0.4)', color: 'var(--muted)' },
+  }
+  const c = colours[level] ?? colours.LOW
+  return (
+    <span style={{
+      fontSize: 8, fontFamily: 'Rajdhani', fontWeight: 700,
+      padding: '1px 5px', borderRadius: 3,
+      background: c.bg, border: `1px solid ${c.border}`, color: c.color,
+      letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0,
+    }}>
+      {level}
+    </span>
   )
 }
