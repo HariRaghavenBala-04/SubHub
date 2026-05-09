@@ -398,13 +398,12 @@ export default function Match() {
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+      <div className="match-console" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
 
         {/* Controls bar */}
-        <div className="glass" style={{
+        <div className="console-topbar" style={{
           padding: '8px 14px', display: 'flex', flexWrap: 'wrap',
           gap: 10, alignItems: 'center',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
           borderRadius: 0, zIndex: 30, flexShrink: 0,
         }}>
           {/* Team name */}
@@ -463,27 +462,23 @@ export default function Match() {
           {/* Intent */}
           <div style={{ display: 'flex', gap: 3 }}>
             {INTENTS.map(i => (
-              <button key={i.value} onClick={() => setIntent(i.value)} style={{
-                background: intent === i.value ? 'rgba(0,255,135,0.15)' : 'transparent',
-                border: intent === i.value ? '1px solid rgba(0,255,135,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 5, color: intent === i.value ? 'var(--green)' : 'var(--muted)',
-                fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 600,
-                padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}>{i.label}</button>
+              <button
+                key={i.value}
+                onClick={() => setIntent(i.value)}
+                className={`toggle-pill${intent === i.value ? ' active' : ''}`}
+              >{i.label}</button>
             ))}
           </div>
 
           {/* Playstyle selector */}
           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
             {Object.entries(playstyles).map(([key, ps]) => (
-              <button key={key} onClick={() => setPlaystyle(key)} title={ps.description} style={{
-                background: playstyle === key ? 'rgba(0,200,255,0.15)' : 'transparent',
-                border: playstyle === key ? '1px solid rgba(0,200,255,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 5,
-                color: playstyle === key ? '#00c8ff' : 'var(--muted)',
-                fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 600,
-                padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}>
+              <button
+                key={key}
+                onClick={() => setPlaystyle(key)}
+                title={ps.description}
+                className={`toggle-pill${playstyle === key ? ' active' : ''}`}
+              >
                 {ps.icon} {ps.label}
               </button>
             ))}
@@ -492,13 +487,11 @@ export default function Match() {
           {/* Formation toggle */}
           <div style={{ display: 'flex', gap: 3 }}>
             {FORMATION_KEYS.map(f => (
-              <button key={f} onClick={() => handleFormationChange(f)} style={{
-                background: formation === f ? 'rgba(0,255,135,0.15)' : 'transparent',
-                border: formation === f ? '1px solid rgba(0,255,135,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 5, color: formation === f ? 'var(--green)' : 'var(--muted)',
-                fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 700,
-                padding: '4px 7px', cursor: 'pointer',
-              }}>{f}</button>
+              <button
+                key={f}
+                onClick={() => handleFormationChange(f)}
+                className={`toggle-pill${formation === f ? ' active' : ''}`}
+              >{f}</button>
             ))}
           </div>
 
@@ -518,15 +511,12 @@ export default function Match() {
           )}
 
           {/* Analyse */}
-          <button onClick={handleAnalyse} disabled={recLoading || loading} style={{
-            marginLeft: 'auto',
-            background: (recLoading || loading) ? 'rgba(0,255,135,0.3)' : 'var(--green)',
-            color: '#000', border: 'none', borderRadius: 6,
-            fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 13,
-            padding: '7px 18px', cursor: (recLoading || loading) ? 'not-allowed' : 'pointer',
-            letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-          }}>
-            {recLoading ? 'Analysing tactical options…' : '⚡ Analyse Subs'}
+          <button
+            onClick={handleAnalyse}
+            disabled={recLoading || loading}
+            className={`analyse-btn${recLoading || loading ? ' loading' : ''}`}
+          >
+            {recLoading ? 'Analysing…' : '⚡ Analyse Subs'}
           </button>
         </div>
 

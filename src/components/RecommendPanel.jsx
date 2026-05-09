@@ -33,23 +33,26 @@ export default function RecommendPanel({ recs = [], conflictWarning = null, onCl
 
   return (
     <div
-      className="slide-in glass"
+      className="slide-in recommend-panel"
       style={{
         position: 'absolute', top: 0, right: 0,
         width: 296, height: '100%',
         overflowY: 'auto', zIndex: 20,
         padding: '14px 12px',
         display: 'flex', flexDirection: 'column', gap: 10,
-        borderLeft: '2px solid rgba(0,255,135,0.3)',
         borderRadius: 0,
-        background: '#0f1318',
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0,
+        background: 'linear-gradient(90deg, rgba(200,150,60,0.15), transparent)',
+        borderBottom: '1px solid rgba(200,150,60,0.2)',
+        margin: '-14px -12px 0', padding: '12px 16px',
+      }}>
         <span style={{
           fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15,
-          color: 'var(--green)', letterSpacing: '0.1em', textTransform: 'uppercase',
+          color: 'var(--card-gold-top)', letterSpacing: '0.1em', textTransform: 'uppercase',
         }}>
           ⚡ Sub Recommendations
         </span>
@@ -59,7 +62,7 @@ export default function RecommendPanel({ recs = [], conflictWarning = null, onCl
         }}>✕</button>
       </div>
 
-      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: -4, flexShrink: 0 }}>
+      <div style={{ fontSize: 10, color: 'var(--card-text-muted)', flexShrink: 0 }}>
         FC26 2025/26 intelligence engine
       </div>
 
@@ -127,19 +130,23 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
 
   return (
     <div
-      className="glass"
+      className="rec-card-gold"
       style={{
-        padding: '9px 10px',
-        border: rank === 1 ? '1px solid rgba(0,255,135,0.25)' : '1px solid rgba(255,255,255,0.07)',
         display: 'flex', flexDirection: 'column', gap: 6,
         flexShrink: 0, cursor: 'default',
+        border: rank === 1
+          ? '1px solid rgba(200,150,60,0.5)'
+          : '1px solid rgba(200,150,60,0.25)',
+        boxShadow: rank === 1
+          ? '0 0 12px rgba(200,150,60,0.15)'
+          : 'none',
       }}
       onMouseEnter={() => onHoverRec?.(rec)}
       onMouseLeave={() => onHoverRec?.(null)}
     >
-      {/* Rank row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 17, color: rankColour, minWidth: 22 }}>
+      {/* Rank header band */}
+      <div className="rec-card-gold-header" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontFamily: 'Rajdhani', fontWeight: 900, fontSize: 18, color: 'var(--card-gold-top)', minWidth: 24 }}>
           #{rank}
         </span>
         <div style={{ flex: 1, lineHeight: 1.3 }}>
@@ -164,8 +171,11 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
         }}>{conf}</span>
       </div>
 
+      {/* Card body */}
+      <div style={{ padding: '0 10px 9px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+
       {/* SUB OFF section */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 5 }}>
+      <div style={{ borderTop: '1px solid rgba(200,150,60,0.12)', paddingTop: 5 }}>
         <div style={{ fontSize: 8, color: 'var(--red)', fontFamily: 'Rajdhani', fontWeight: 700, marginBottom: 3 }}>
           SUB OFF · {sub_off?.name} · {sub_off?.slot ?? sub_off?.position}
         </div>
@@ -195,7 +205,7 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
       </div>
 
       {/* SUB ON section */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 5 }}>
+      <div style={{ borderTop: '1px solid rgba(200,150,60,0.12)', paddingTop: 5 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ fontSize: 8, color: 'var(--green)', fontFamily: 'Rajdhani', fontWeight: 700 }}>
             SUB ON · {sub_on?.name} · {sub_on?.slot ?? sub_on?.position}
@@ -280,22 +290,11 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
       )}
 
       {/* Apply Sub button */}
-      <button
-        onClick={() => onApply?.(rec)}
-        style={{
-          marginTop: 2, width: '100%',
-          background: 'rgba(0,255,135,0.12)', border: '1px solid rgba(0,255,135,0.4)',
-          borderRadius: 5, color: 'var(--green)',
-          fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 11,
-          padding: '5px 0', cursor: 'pointer',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          transition: 'background 0.15s',
-        }}
-        onMouseEnter={e => { e.target.style.background = 'rgba(0,255,135,0.22)' }}
-        onMouseLeave={e => { e.target.style.background = 'rgba(0,255,135,0.12)' }}
-      >
+      <button className="apply-sub-btn" onClick={() => onApply?.(rec)}>
         ✓ Apply Sub
       </button>
+
+      </div>{/* end card body */}
     </div>
   )
 }

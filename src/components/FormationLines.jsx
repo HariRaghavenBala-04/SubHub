@@ -19,9 +19,9 @@ function minStamina(a, b) { return Math.min(a?.stamina_pct ?? 80, b?.stamina_pct
 
 function lineColour(a, b) {
   const pct = minStamina(a, b)
-  if (pct >= 70) return '#00ff87'
-  if (pct >= 40) return '#ffb800'
-  return '#ff3d3d'
+  if (pct >= 70) return { stroke: 'rgba(0, 255, 135, 0.25)', strokeWidth: '1',   dasharray: '4 4' }
+  if (pct >= 40) return { stroke: 'rgba(255, 184, 0, 0.30)', strokeWidth: '1',   dasharray: '4 4' }
+  return              { stroke: 'rgba(255, 61, 61, 0.40)',  strokeWidth: '1.5', dasharray: '3 3' }
 }
 
 export default function FormationLines({ players }) {
@@ -74,7 +74,7 @@ export default function FormationLines({ players }) {
       style={{
         position: 'absolute', inset: 0,
         width: '100%', height: '100%',
-        pointerEvents: 'none', zIndex: 1,
+        pointerEvents: 'none', zIndex: 3,
         overflow: 'hidden',
       }}
     >
@@ -86,16 +86,15 @@ export default function FormationLines({ players }) {
       </defs>
       <g clipPath="url(#pitch-clip)">
         {lines.map(({ from, to, key }) => {
-          const colour = lineColour(from, to)
+          const lc = lineColour(from, to)
           return (
             <line
               key={key}
               x1={`${from.left}%`} y1={`${from.top}%`}
               x2={`${to.left}%`}   y2={`${to.top}%`}
-              stroke={colour}
-              strokeWidth="1"
-              strokeOpacity="0.28"
-              strokeDasharray="5 4"
+              stroke={lc.stroke}
+              strokeWidth={lc.strokeWidth}
+              strokeDasharray={lc.dasharray}
               style={{ animation: 'dashFlow 1.8s linear infinite' }}
             />
           )

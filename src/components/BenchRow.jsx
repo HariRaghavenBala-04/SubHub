@@ -81,12 +81,12 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd })
             onClick={() => onSelect?.(player)}
           />
         ) : (
-          <PlayerCard player={player} size="small" />
+          <PlayerCard player={player} size={onAdd ? 'reserve' : 'small'} />
         )
       ) : (
         <div style={{
-          width: 72, height: 86, border: '1px dashed rgba(255,255,255,0.1)',
-          borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 58, height: 74, border: '1px dashed rgba(200,150,60,0.15)',
+          borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--muted)', fontSize: 10,
         }}>—</div>
       )}

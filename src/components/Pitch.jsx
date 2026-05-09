@@ -35,9 +35,11 @@ export default function Pitch({
     <div style={{
       position: 'relative', width: '100%', flex: 1, minHeight: 420,
       borderRadius: 8, overflow: 'hidden',
-      border: '2px solid rgba(255,255,255,0.1)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      background: 'var(--pitch-dark)',
     }}>
       <PitchStripes />
+      <StadiumGlow />
       <PitchMarkings />
 
       {/* Formation connection lines — clipped inside pitch */}
@@ -150,11 +152,30 @@ function EmptySlot({ label }) {
 
 function PitchStripes() {
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 0 }}>
       {Array.from({ length: 10 }, (_, i) => (
-        <div key={i} style={{ flex: 1, background: i % 2 === 0 ? 'var(--pitch-dark)' : 'var(--pitch-light)' }} />
+        <div key={i} style={{
+          flex: 1,
+          background: i % 2 === 0 ? 'var(--pitch-stripe-dark)' : 'var(--pitch-stripe-light)',
+          opacity: 0.6,
+        }} />
       ))}
     </div>
+  )
+}
+
+function StadiumGlow() {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+      background: `
+        radial-gradient(ellipse at 0% 0%,   var(--stadium-glow-1) 0%, transparent 50%),
+        radial-gradient(ellipse at 100% 0%,  var(--stadium-glow-1) 0%, transparent 50%),
+        radial-gradient(ellipse at 0% 100%,  var(--stadium-glow-2) 0%, transparent 50%),
+        radial-gradient(ellipse at 100% 100%,var(--stadium-glow-2) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%,  var(--stadium-glow-3) 0%, transparent 70%)
+      `,
+    }} />
   )
 }
 
