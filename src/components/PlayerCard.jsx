@@ -186,12 +186,26 @@ export default function PlayerCard({
           </div>
         )}
 
-        {/* Player name */}
-        <div className="card-name-wrapper">
-          <span className={displayName.length > 10 ? 'card-name-pivot' : 'card-name-static'}>
-            {displayName}
-          </span>
-        </div>
+        {/* Player name — ping-pong marquee when name overflows card */}
+        {(() => {
+          const nameWidth = displayName.length * 5.5
+          const cardUsableWidth = 60
+          const overflows = nameWidth > cardUsableWidth
+          const scrollPx = overflows ? Math.round(nameWidth - cardUsableWidth) : 0
+          return (
+            <div className="card-name-wrapper">
+              <span
+                className="card-name-text"
+                style={overflows ? {
+                  '--scroll-px': `-${scrollPx}px`,
+                  animation: 'pingPongScroll 3.5s ease-in-out infinite',
+                } : {}}
+              >
+                {displayName}
+              </span>
+            </div>
+          )
+        })()}
 
         {/* Stamina bar */}
         <div className="card-stamina-bar">
