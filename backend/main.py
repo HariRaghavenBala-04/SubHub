@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from .engine.recommender      import get_recommendations
 from .engine.scenario_planner import plan_scenarios, injury_response
 from .engine.fc26_loader      import get_player_attributes, get_position_profile, get_player_versatility
-from .engine.squad_builder    import build_squad
+from .engine.squad_builder    import build_squad, build_squad_fc26
 from .engine.formation_slots  import reassign_for_formation, FORMATION_SLOTS
 
 load_dotenv()
@@ -161,8 +161,7 @@ async def get_squad(
     league_code: str = "PL",
     formation: str = "4-3-3",
 ):
-    # Step 1: fetch squad from football-data.org — this is the ONLY source
-    #         of truth for who is in the squad.
+    # Step 1: fetch team name + crest from football-data.org (lightweight call)
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
             f"{FD_BASE}/teams/{team_id}",
@@ -174,46 +173,44 @@ async def get_squad(
 
     data      = resp.json()
     team_name = data.get("name", "")
-    api_squad = data.get("squad", [])
+    crest_url = data.get("crest", "")
 
-    if not api_squad:
-        raise HTTPException(404, f"No squad found for team {team_id}")
+    # Step 2: build squad entirely from FC26 club data
+    result = build_squad_fc26(team_name, formation)
 
-    # ── DIAGNOSTIC LOG 1: raw API squad ──────────────────────────────────
-    print(f"=== RAW API SQUAD for team {team_id} ===")
-    for p in api_squad:
-        print(f"  {p['name']}")
-    print(f"=== TOTAL FROM API: {len(api_squad)} ===")
-
-    result = build_squad(api_squad, team_name, formation)
+    if not result:
+        raise HTTPException(
+            404,
+            f"Club not found in FC26 data: {team_name!r}. "
+            "Check club name mapping or add to find_fc26_club_name()."
+        )
 
     print(
-        f"[Squad] {team_name}: XI={len(result['starting_xi'])} "
-        f"bench={len(result['bench'])} reserves={len(result['reserves'])} "
-        f"unmatched={result['unmatched']}/{result['total']}"
+        f"[Squad] {team_name} → {result['fc26_club']}: "
+        f"XI={len(result['starting_xi'])} bench={len(result['bench'])} "
+        f"reserves={len(result['reserves'])} total={result['total']}"
     )
 
-    # Combine all for the legacy 'squad' field
     all_players = result["starting_xi"] + result["bench"] + result["reserves"]
-
-    # ── DIAGNOSTIC LOG 2: final squad sent to frontend ───────────────────
-    print(f"=== FINAL SQUAD SENT TO FRONTEND ===")
+    print(f"=== FINAL SQUAD SENT TO FRONTEND ({team_name}) ===")
     for p in all_players:
-        print(f"  {p['name']} | fc26_matched: {p['fc26_matched']}")
+        print(f"  {p.get('short_name', p['name']):<22} "
+              f"pos={p['api_position']:<5} ovr={p['overall']}")
 
     return {
         "team": {
-            "id":      data["id"],
-            "name":    team_name,
-            "crestUrl": data.get("crest", ""),
+            "id":       team_id,
+            "name":     team_name,
+            "crestUrl": crest_url,
         },
-        "squad":       all_players,   # legacy flat list
-        "starting_xi": result["starting_xi"],
+        "squad":        all_players,
+        "starting_xi":  result["starting_xi"],
         "bench":        result["bench"],
         "reserves":     result["reserves"],
         "meta": {
-            "unmatched_count": result["unmatched"],
-            "total_squad":     result["total"],
+            "fc26_club":     result["fc26_club"],
+            "total_squad":   result["total"],
+            "unmatched_count": 0,
         },
     }
 
@@ -262,6 +259,17 @@ async def player_profile(name: str, position: str = "CM"):
 @app.post("/api/recommend")
 async def recommend(request: Request):
     body = await request.json()
+    print(f"=== RECOMMEND REQUEST ===")
+    print(f"minute: {body.get('minute')}")
+    print(f"home_score: {body.get('home_score')}")
+    print(f"away_score: {body.get('away_score')}")
+    print(f"is_home: {body.get('is_home')}")
+    print(f"manager_intent: {body.get('manager_intent')}")
+    print(f"playstyle: {body.get('playstyle')}")
+    print(f"formation: {body.get('formation')}")
+    print(f"XI players: {[p.get('name') for p in body.get('starting_xi', [])]}")
+    print(f"Bench players: {[p.get('name') for p in body.get('bench', [])]}")
+    print(f"========================")
     return get_recommendations(
         starting_xi     = body.get("starting_xi", []),
         bench           = body.get("bench", []),

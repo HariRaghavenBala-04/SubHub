@@ -107,10 +107,9 @@ _FC26_ATTRS = [
     "goalkeeping_diving", "goalkeeping_kicking",
 ]
 
-# Load columns needed for stats plus league_name for pre-filtering only.
-# club_name / club_team_id are intentionally NOT loaded.
+# Load columns needed for stats plus league/club for filtering and lookup.
 _LOAD_COLS = [
-    "short_name", "league_name", "overall",
+    "short_name", "long_name", "club_name", "league_name", "overall",
     "work_rate", "player_positions",
 ] + _FC26_ATTRS + _POS_COLS
 
@@ -789,3 +788,277 @@ def _assign_slots(players: list[dict], formation: str) -> list[dict]:
         print(f"  {p['name']:<28} → {slot:<5} (rating: {slot_rating}, fit: {fit})")
 
     return [slot_to_player[j] for j in range(m)]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FC26-FIRST SQUAD BUILDER — uses FC26 club roster directly
+# ══════════════════════════════════════════════════════════════════════════════
+
+_FC26_POS_MAP: dict[str, str] = {
+    "GK": "GK", "CB": "CB", "LB": "LB", "RB": "RB",
+    "LWB": "LWB", "RWB": "RWB", "CDM": "CDM", "CM": "CM",
+    "LM": "LM", "RM": "RM", "CAM": "CAM", "LAM": "LAM", "RAM": "RAM",
+    "LW": "LW", "RW": "RW", "ST": "ST", "CF": "CF",
+    "LS": "ST", "RS": "ST", "LF": "LW", "RF": "RW", "SS": "ST",
+}
+
+_POSITION_GROUPS_FC26: dict[str, list[str]] = {
+    "GK":  ["GK"],
+    "DEF": ["CB", "LB", "RB", "LWB", "RWB"],
+    "MID": ["CDM", "CM", "LM", "RM", "CAM", "LAM", "RAM"],
+    "ATT": ["ST", "CF", "LW", "RW"],
+}
+
+
+# Hard overrides for API names that fuzzy matching can't resolve.
+_CLUB_OVERRIDES: dict[str, str] = {
+    "FC Internazionale Milano":       "Inter",
+    "Internazionale":                 "Inter",
+    "Wolverhampton Wanderers FC":     "Wolves",
+    "Nottingham Forest FC":           "Nottingham Forest",
+    "Brighton & Hove Albion FC":      "Brighton & Hove Albion",
+    "Borussia Mönchengladbach":       "B. Mönchengladbach",
+    "1. FSV Mainz 05":                "Mainz 05",
+    "1. FC Heidenheim 1846":          "Heidenheim",
+    "1. FC Köln":                     "1. FC Köln",
+    "1. FC Union Berlin":             "Union Berlin",
+    "TSG 1899 Hoffenheim":            "Hoffenheim",
+    "RB Leipzig":                     "RB Leipzig",
+    "SC Freiburg":                    "SC Freiburg",
+    "SV Werder Bremen":               "Werder Bremen",
+    "FC St. Pauli 1910":              "St. Pauli",
+    "Athletic Club":                  "Athletic Club de Bilbao",
+    "CA Osasuna":                     "Osasuna",
+    "RCD Espanyol de Barcelona":      "Espanyol",
+    "RCD Mallorca":                   "RCD Mallorca",
+    "Deportivo Alavés":               "Deportivo Alavés",
+    "RC Celta de Vigo":               "Celta de Vigo",
+    "Real Betis Balompié":            "Real Betis",
+    "Real Sociedad de Fútbol":        "Real Sociedad",
+    "FC Internazionale Milano":       "Inter",
+    "SS Lazio":                       "Lazio",
+    "Bologna FC 1909":                "Bologna",
+    "Hellas Verona FC":               "Hellas Verona",
+    "Parma Calcio 1913":              "Parma",
+    "Stade Brestois 29":              "Stade Brest",
+    "Stade Rennais FC 1901":          "Rennes",
+    "RC Strasbourg Alsace":           "Strasbourg",
+    "Sport Lisboa e Benfica":         "Benfica",
+    "Sporting Clube de Portugal":     "Sporting CP",
+    "Sporting Clube de Braga":        "Braga",
+    "AFC Ajax":                       "Ajax",
+    "FC Twente '65":                  "Twente",
+    "SC Heerenveen":                  "Heerenveen",
+    "PEC Zwolle":                     "PEC Zwolle",
+    "Go Ahead Eagles":                "Go Ahead Eagles",
+    "Sparta Rotterdam":               "Sparta Rotterdam",
+    "Fortuna Sittard":                "Fortuna Sittard",
+    "AZ":                             "AZ Alkmaar",
+    "NEC":                            "NEC Nijmegen",
+    "NAC Breda":                      "NAC Breda",
+}
+
+
+def find_fc26_club_name(api_team_name: str) -> str | None:
+    """
+    Given a team name from football-data.org, find the matching club_name
+    in the FC26 CSV via suffix-stripping + fuzzy matching.
+    e.g. "Arsenal FC" → "Arsenal", "FC Bayern München" → "Bayern München"
+    """
+    if FC26_DF.empty:
+        return None
+
+    # Hard override first
+    if api_team_name in _CLUB_OVERRIDES:
+        target = _CLUB_OVERRIDES[api_team_name]
+        fc26_clubs = FC26_DF["club_name"].dropna().unique().tolist()
+        if target in fc26_clubs:
+            print(f"[Club] {api_team_name!r} → override → {target!r}")
+            return target
+
+    clean = api_team_name.strip()
+    for suffix in [" FC", " AFC", " CF", " SC", " AC", " BC", " FK", " SK",
+                   "FC ", "AFC "]:
+        clean = clean.replace(suffix, "").strip()
+
+    fc26_clubs = FC26_DF["club_name"].dropna().unique().tolist()
+
+    if clean in fc26_clubs:
+        return clean
+    if api_team_name in fc26_clubs:
+        return api_team_name
+
+    hits = get_close_matches(clean, fc26_clubs, n=1, cutoff=0.6)
+    if hits:
+        print(f"[Club] {api_team_name!r} → fuzzy(clean) → {hits[0]!r}")
+        return hits[0]
+
+    hits = get_close_matches(api_team_name, fc26_clubs, n=1, cutoff=0.6)
+    if hits:
+        print(f"[Club] {api_team_name!r} → fuzzy(raw) → {hits[0]!r}")
+        return hits[0]
+
+    print(f"[Club] NO MATCH for {api_team_name!r}")
+    return None
+
+
+def build_player_from_fc26_row(row) -> dict:
+    """Convert a FC26 DataFrame row into the player dict format used by the app."""
+
+    def _int(val, default: int = 65) -> int:
+        try:
+            return int(str(val).split("+")[0].split("-")[0].strip())
+        except Exception:
+            return default
+
+    fc26_pos_str = str(row.get("player_positions", "CM"))
+    primary_pos  = fc26_pos_str.split(",")[0].strip().upper()
+    api_position = _FC26_POS_MAP.get(primary_pos, "CM")
+
+    wr_raw  = row.get("work_rate", "Medium/Medium")
+    wr_str  = str(wr_raw) if str(wr_raw).lower() != "nan" else "Medium/Medium"
+    wr_parts = wr_str.split("/")
+    work_rate_att = wr_parts[0].strip() if wr_parts else "Medium"
+    work_rate_def = wr_parts[1].strip() if len(wr_parts) > 1 else "Medium"
+
+    pos_ratings: dict[str, int] = {}
+    for col in _POS_COLS:
+        pos_ratings[col] = _int(row.get(col, 60))
+
+    overall = _int(row.get("overall", 70))
+    name    = str(row.get("long_name", row.get("short_name", "Unknown")))
+
+    return {
+        # Identity
+        "id":            abs(hash(str(row.get("short_name", name)))) % (10 ** 9),
+        "name":          name,
+        "short_name":    str(row.get("short_name", "")),
+        "api_position":  api_position,
+        "position":      api_position,
+        "shirt_number":  None,
+        "nationality":   str(row.get("nationality_name", "")),
+        "minutes_played": 0,
+        "is_injury_return": False,
+        "fc26_matched":  True,
+        "fc26_club":     str(row.get("club_name", "")),
+        "overall":       overall,
+        "impact_score":  float(overall),
+        "stamina_pct":   80.0,
+        # Work rate
+        "work_rate_att": work_rate_att,
+        "work_rate_def": work_rate_def,
+        # Position ratings
+        "pos_ratings":   pos_ratings,
+        # Base attributes
+        "pace":       _int(row.get("pace", 65)),
+        "shooting":   _int(row.get("shooting", 65)),
+        "passing":    _int(row.get("passing", 65)),
+        "dribbling":  _int(row.get("dribbling", 65)),
+        "defending":  _int(row.get("defending", 65)),
+        "physic":     _int(row.get("physic", 65)),
+        # Detailed attributes
+        "attacking_crossing":          _int(row.get("attacking_crossing", 65)),
+        "attacking_finishing":         _int(row.get("attacking_finishing", 65)),
+        "attacking_heading_accuracy":  _int(row.get("attacking_heading_accuracy", 65)),
+        "attacking_short_passing":     _int(row.get("attacking_short_passing", 65)),
+        "attacking_volleys":           _int(row.get("attacking_volleys", 65)),
+        "skill_dribbling":             _int(row.get("skill_dribbling", 65)),
+        "skill_curve":                 _int(row.get("skill_curve", 65)),
+        "skill_fk_accuracy":           _int(row.get("skill_fk_accuracy", 65)),
+        "skill_long_passing":          _int(row.get("skill_long_passing", 65)),
+        "skill_ball_control":          _int(row.get("skill_ball_control", 65)),
+        "movement_acceleration":       _int(row.get("movement_acceleration", 65)),
+        "movement_sprint_speed":       _int(row.get("movement_sprint_speed", 65)),
+        "movement_agility":            _int(row.get("movement_agility", 65)),
+        "movement_reactions":          _int(row.get("movement_reactions", 65)),
+        "movement_balance":            _int(row.get("movement_balance", 65)),
+        "power_shot_power":            _int(row.get("power_shot_power", 65)),
+        "power_jumping":               _int(row.get("power_jumping", 65)),
+        "power_stamina":               _int(row.get("power_stamina", 65)),
+        "power_strength":              _int(row.get("power_strength", 65)),
+        "power_long_shots":            _int(row.get("power_long_shots", 65)),
+        "mentality_aggression":        _int(row.get("mentality_aggression", 65)),
+        "mentality_interceptions":     _int(row.get("mentality_interceptions", 65)),
+        "mentality_positioning":       _int(row.get("mentality_positioning", 65)),
+        "mentality_vision":            _int(row.get("mentality_vision", 65)),
+        "mentality_composure":         _int(row.get("mentality_composure", 65)),
+        "defending_marking_awareness": _int(row.get("defending_marking_awareness", 65)),
+        "defending_standing_tackle":   _int(row.get("defending_standing_tackle", 65)),
+        "defending_sliding_tackle":    _int(row.get("defending_sliding_tackle", 65)),
+        "goalkeeping_diving":          _int(row.get("goalkeeping_diving", 65)),
+        "goalkeeping_handling":        _int(row.get("goalkeeping_handling", 65)),
+        "goalkeeping_kicking":         _int(row.get("goalkeeping_kicking", 65)),
+        "goalkeeping_positioning":     _int(row.get("goalkeeping_positioning", 65)),
+        "goalkeeping_reflexes":        _int(row.get("goalkeeping_reflexes", 65)),
+    }
+
+
+def select_balanced_xi(players: list[dict]) -> list[dict]:
+    """
+    Select 11 players from an FC26 club roster ensuring GK+DEF+MID+ATT balance.
+    Uses api_position (derived from FC26 player_positions) for grouping.
+    """
+    def _grp(pos: str) -> str:
+        for g, members in _POSITION_GROUPS_FC26.items():
+            if pos in members:
+                return g
+        return "MID"
+
+    selected: list[dict] = []
+    used: set[str] = set()
+    needs = {"GK": 1, "DEF": 4, "MID": 3, "ATT": 3}
+
+    for group, count in needs.items():
+        pool = sorted(
+            [p for p in players if _grp(p["api_position"]) == group and p["name"] not in used],
+            key=lambda x: x["overall"], reverse=True,
+        )
+        for p in pool[:count]:
+            selected.append(p)
+            used.add(p["name"])
+
+    # Fill to 11 if any group was short
+    for p in sorted(players, key=lambda x: x["overall"], reverse=True):
+        if p["name"] not in used and len(selected) < 11:
+            selected.append(p)
+            used.add(p["name"])
+
+    return selected[:11]
+
+
+def build_squad_fc26(api_team_name: str, formation: str = "4-3-3") -> dict | None:
+    """
+    Build a complete squad using FC26 club data only.
+    The football-data.org API is used only to resolve the team name → club lookup.
+
+    Returns None if no matching FC26 club is found.
+    """
+    fc26_club = find_fc26_club_name(api_team_name)
+    if not fc26_club:
+        return None
+
+    club_df = FC26_DF[FC26_DF["club_name"] == fc26_club].copy()
+    print(f"[Squad] {api_team_name!r} → {fc26_club!r}: {len(club_df)} players in FC26")
+
+    players = [build_player_from_fc26_row(row) for _, row in club_df.iterrows()]
+    players.sort(key=lambda x: x["overall"], reverse=True)
+
+    xi_raw = select_balanced_xi(players)
+    xi     = _assign_slots(xi_raw, formation)
+
+    xi_names = {p["name"] for p in xi}
+    rest = sorted(
+        [p for p in players if p["name"] not in xi_names],
+        key=lambda x: x["overall"], reverse=True,
+    )
+    bench, reserves = _balance_bench(rest[:7], rest[7:])
+
+    return {
+        "fc26_club":   fc26_club,
+        "starting_xi": xi,
+        "bench":       bench,
+        "reserves":    reserves,
+        "formation":   formation,
+        "total":       len(players),
+        "unmatched":   0,
+    }
