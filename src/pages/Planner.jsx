@@ -56,26 +56,19 @@ const TEAM_COUNTRY = {
 // ── UEFA eligibility ───────────────────────────────────────────────────────
 
 const UEFA_ELIGIBILITY = {
-  // ENGLAND
   57: 'UCL', 58: 'UEL', 61: 'UCL', 64: 'UCL',
   65: 'UCL', 67: 'UCL', 73: 'UCL',
   354: 'UECL', 351: 'UEL',
-  // GERMANY
   3: 'UCL', 4: 'UCL', 5: 'UCL', 10: 'UEL',
   17: 'UEL', 19: 'UCL', 721: 'UECL',
-  // SPAIN
   78: 'UCL', 81: 'UCL', 86: 'UCL', 90: 'UEL',
   92: 'UECL', 94: 'UCL', 95: 'UCL', 558: 'UEL',
-  // FRANCE
   516: 'UECL', 521: 'UEL', 523: 'UEL',
   524: 'UCL', 527: 'UCL', 548: 'UCL',
-  // ITALY
   99: 'UECL', 100: 'UEL', 102: 'UCL', 103: 'UEL',
   108: 'UCL', 109: 'UCL', 113: 'UCL',
-  // NETHERLANDS
   674: 'UCL', 675: 'UCL', 678: 'UCL',
   682: 'UECL', 718: 'UEL',
-  // PORTUGAL
   495: 'UCL', 498: 'UCL', 503: 'UEL',
   5543: 'UECL', 5613: 'UEL',
 }
@@ -174,6 +167,133 @@ function getStaminaColor(stamina) {
   return '#ff3d3d'
 }
 
+// ── Surname helper (for builder cards) ────────────────────────────────────
+
+function getSurname(name) {
+  if (!name) return ''
+  const parts = name.trim().split(' ')
+  if (parts.length === 1) return parts[0].toUpperCase()
+  const prefixes = ['van', 'de', 'di', 'da', 'mac', 'mc', 'dos', 'del', 'der', 'le', 'la']
+  if (parts.length >= 3) {
+    const secondLast = parts[parts.length - 2].toLowerCase()
+    if (prefixes.includes(secondLast))
+      return parts.slice(-2).join(' ').toUpperCase()
+  }
+  return parts[parts.length - 1].toUpperCase()
+}
+
+// ── Builder formation slots ────────────────────────────────────────────────
+
+const BUILDER_SLOTS = {
+  '4-3-3': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'LB_0',  slot: 'LB',  left: '16%', top: '71%' },
+    { key: 'CB_0',  slot: 'CB',  left: '37%', top: '71%' },
+    { key: 'CB_1',  slot: 'CB',  left: '63%', top: '71%' },
+    { key: 'RB_0',  slot: 'RB',  left: '84%', top: '71%' },
+    { key: 'CM_0',  slot: 'CM',  left: '24%', top: '51%' },
+    { key: 'CM_1',  slot: 'CM',  left: '50%', top: '49%' },
+    { key: 'CM_2',  slot: 'CM',  left: '76%', top: '51%' },
+    { key: 'LW_0',  slot: 'LW',  left: '14%', top: '26%' },
+    { key: 'ST_0',  slot: 'ST',  left: '50%', top: '22%' },
+    { key: 'RW_0',  slot: 'RW',  left: '86%', top: '26%' },
+  ],
+  '4-4-2': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'LB_0',  slot: 'LB',  left: '13%', top: '71%' },
+    { key: 'CB_0',  slot: 'CB',  left: '36%', top: '71%' },
+    { key: 'CB_1',  slot: 'CB',  left: '64%', top: '71%' },
+    { key: 'RB_0',  slot: 'RB',  left: '87%', top: '71%' },
+    { key: 'LM_0',  slot: 'LM',  left: '9%',  top: '51%' },
+    { key: 'CM_0',  slot: 'CM',  left: '36%', top: '51%' },
+    { key: 'CM_1',  slot: 'CM',  left: '64%', top: '51%' },
+    { key: 'RM_0',  slot: 'RM',  left: '91%', top: '51%' },
+    { key: 'ST_0',  slot: 'ST',  left: '36%', top: '24%' },
+    { key: 'ST_1',  slot: 'ST',  left: '64%', top: '24%' },
+  ],
+  '4-2-3-1': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'LB_0',  slot: 'LB',  left: '13%', top: '73%' },
+    { key: 'CB_0',  slot: 'CB',  left: '36%', top: '73%' },
+    { key: 'CB_1',  slot: 'CB',  left: '64%', top: '73%' },
+    { key: 'RB_0',  slot: 'RB',  left: '87%', top: '73%' },
+    { key: 'CDM_0', slot: 'CDM', left: '36%', top: '59%' },
+    { key: 'CDM_1', slot: 'CDM', left: '64%', top: '59%' },
+    { key: 'LAM_0', slot: 'LAM', left: '14%', top: '41%' },
+    { key: 'CAM_0', slot: 'CAM', left: '50%', top: '39%' },
+    { key: 'RAM_0', slot: 'RAM', left: '86%', top: '41%' },
+    { key: 'ST_0',  slot: 'ST',  left: '50%', top: '21%' },
+  ],
+  '3-5-2': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'CB_0',  slot: 'CB',  left: '24%', top: '71%' },
+    { key: 'CB_1',  slot: 'CB',  left: '50%', top: '71%' },
+    { key: 'CB_2',  slot: 'CB',  left: '76%', top: '71%' },
+    { key: 'LM_0',  slot: 'LM',  left: '7%',  top: '51%' },
+    { key: 'CM_0',  slot: 'CM',  left: '29%', top: '51%' },
+    { key: 'CM_1',  slot: 'CM',  left: '50%', top: '49%' },
+    { key: 'CM_2',  slot: 'CM',  left: '71%', top: '51%' },
+    { key: 'RM_0',  slot: 'RM',  left: '93%', top: '51%' },
+    { key: 'ST_0',  slot: 'ST',  left: '36%', top: '24%' },
+    { key: 'ST_1',  slot: 'ST',  left: '64%', top: '24%' },
+  ],
+  '5-3-2': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'LWB_0', slot: 'LWB', left: '7%',  top: '67%' },
+    { key: 'CB_0',  slot: 'CB',  left: '26%', top: '73%' },
+    { key: 'CB_1',  slot: 'CB',  left: '50%', top: '75%' },
+    { key: 'CB_2',  slot: 'CB',  left: '74%', top: '73%' },
+    { key: 'RWB_0', slot: 'RWB', left: '93%', top: '67%' },
+    { key: 'CM_0',  slot: 'CM',  left: '27%', top: '51%' },
+    { key: 'CM_1',  slot: 'CM',  left: '50%', top: '49%' },
+    { key: 'CM_2',  slot: 'CM',  left: '73%', top: '51%' },
+    { key: 'ST_0',  slot: 'ST',  left: '36%', top: '24%' },
+    { key: 'ST_1',  slot: 'ST',  left: '64%', top: '24%' },
+  ],
+  '4-5-1': [
+    { key: 'GK_0',  slot: 'GK',  left: '50%', top: '88%' },
+    { key: 'LB_0',  slot: 'LB',  left: '13%', top: '73%' },
+    { key: 'CB_0',  slot: 'CB',  left: '36%', top: '73%' },
+    { key: 'CB_1',  slot: 'CB',  left: '64%', top: '73%' },
+    { key: 'RB_0',  slot: 'RB',  left: '87%', top: '73%' },
+    { key: 'LM_0',  slot: 'LM',  left: '7%',  top: '51%' },
+    { key: 'CM_0',  slot: 'CM',  left: '27%', top: '51%' },
+    { key: 'CM_1',  slot: 'CM',  left: '50%', top: '49%' },
+    { key: 'CM_2',  slot: 'CM',  left: '73%', top: '51%' },
+    { key: 'RM_0',  slot: 'RM',  left: '93%', top: '51%' },
+    { key: 'ST_0',  slot: 'ST',  left: '50%', top: '22%' },
+  ],
+}
+
+// ── Position compatibility ─────────────────────────────────────────────────
+
+function isCompatibleForSlot(player, slotType) {
+  const pos = player.api_position || player.position || 'CM'
+  const COMPAT = {
+    GK:  ['GK'],
+    LB:  ['LB', 'LWB', 'CB'],
+    RB:  ['RB', 'RWB', 'CB'],
+    CB:  ['CB', 'LB', 'RB', 'CDM'],
+    LWB: ['LWB', 'LB', 'LM'],
+    RWB: ['RWB', 'RB', 'RM'],
+    CDM: ['CDM', 'CM', 'CB'],
+    CM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
+    LM:  ['LM', 'LW', 'CM', 'LWB'],
+    RM:  ['RM', 'RW', 'CM', 'RWB'],
+    CAM: ['CAM', 'CM', 'LW', 'RW'],
+    LAM: ['LAM', 'CAM', 'LW', 'CM'],
+    RAM: ['RAM', 'CAM', 'RW', 'CM'],
+    LW:  ['LW', 'LM', 'CAM', 'ST'],
+    RW:  ['RW', 'RM', 'CAM', 'ST'],
+    ST:  ['ST', 'CF', 'LW', 'RW'],
+    CF:  ['CF', 'ST', 'CAM'],
+  }
+  if (slotType === 'GK') return pos === 'GK'
+  if (pos === 'GK') return slotType === 'GK'
+  const allowed = COMPAT[slotType] || [slotType]
+  return allowed.includes(pos)
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function Planner() {
@@ -231,7 +351,7 @@ export default function Planner() {
 
   const groupedSquad = useMemo(() => groupPlayers(fullSquad), [fullSquad])
 
-  // ── Player statuses ──────────────────────────────────────────────────────
+  // ── Player statuses (Readiness tab) ─────────────────────────────────────
   const [playerStatuses, setPlayerStatuses] = useState({})
 
   const updateStatus = (playerName, status) => {
@@ -247,17 +367,48 @@ export default function Planner() {
     [playerStatuses]
   )
 
-  // Persist excluded players to localStorage for Console to read
   useEffect(() => {
-    try {
-      localStorage.setItem('subhub_excluded_players', JSON.stringify(excludedPlayers))
-    } catch {}
+    try { localStorage.setItem('subhub_excluded_players', JSON.stringify(excludedPlayers)) } catch {}
   }, [excludedPlayers])
 
-  // Reset statuses when team changes
-  useEffect(() => {
-    setPlayerStatuses({})
-  }, [teamId])
+  useEffect(() => { setPlayerStatuses({}) }, [teamId])
+
+  // ── XI Builder state ─────────────────────────────────────────────────────
+  const [builderFormation, setBuilderFormation] = useState('4-3-3')
+  const [builtXI,          setBuiltXI]          = useState({})
+  const [draggedPlayer,    setDraggedPlayer]    = useState(null)
+  const [bslSearch,        setBslSearch]        = useState('')
+  const [bslFilter,        setBslFilter]        = useState('ALL')
+
+  const placedPlayerNames = useMemo(() =>
+    Object.values(builtXI).filter(Boolean).map(p => p.name),
+    [builtXI]
+  )
+
+  const availablePlayers = useMemo(() =>
+    fullSquad.filter(p =>
+      !placedPlayerNames.includes(p.name) &&
+      !excludedPlayers.includes(p.name)
+    ),
+    [fullSquad, placedPlayerNames, excludedPlayers]
+  )
+
+  const placedCount = Object.values(builtXI).filter(Boolean).length
+
+  const handleLoadIntoConsole = () => {
+    const xi = Object.entries(builtXI)
+      .filter(([, p]) => p !== null && p !== undefined)
+      .map(([key, player]) => {
+        const slotDef = BUILDER_SLOTS[builderFormation].find(s => s.key === key)
+        return { ...player, assigned_slot: slotDef?.slot || player.api_position }
+      })
+    if (xi.length < 11) return
+    try {
+      localStorage.setItem('subhub_custom_xi', JSON.stringify(xi))
+      localStorage.setItem('subhub_custom_formation', builderFormation)
+    } catch {}
+    window.location.href = '/match'
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -368,7 +519,6 @@ export default function Planner() {
 
             {!squadLoading && fullSquad.length > 0 && (
               <>
-                {/* Header */}
                 <div className="readiness-header">
                   <div className="readiness-title">
                     <h2>SQUAD READINESS</h2>
@@ -388,7 +538,6 @@ export default function Planner() {
                   </div>
                 </div>
 
-                {/* Redline warning */}
                 {fullSquad.filter(p =>
                   projectStamina(p, 75) < 40 &&
                   getStatus(p.name) === 'available'
@@ -401,7 +550,6 @@ export default function Planner() {
                   </div>
                 )}
 
-                {/* Status legend bar */}
                 <div className="status-legend-bar">
                   <span>🟢 Available</span>
                   <span>🔴 Injured</span>
@@ -410,13 +558,10 @@ export default function Planner() {
                   <span>🔵 Managed mins</span>
                 </div>
 
-                {/* Player groups */}
                 {Object.entries(groupedSquad).map(([group, players]) =>
                   players.length > 0 && (
                     <div key={group} className="readiness-group">
-                      <div className="readiness-group-label">
-                        {group.toUpperCase()}
-                      </div>
+                      <div className="readiness-group-label">{group.toUpperCase()}</div>
                       <div className="readiness-players">
                         {players.map(player => {
                           const status     = getStatus(player.name)
@@ -434,49 +579,30 @@ export default function Planner() {
                                 isRedline && !isExcluded ? 'redline' : '',
                               ].join(' ').trim()}
                             >
-                              {/* Position badge */}
                               <div className="rp-position">
                                 {player.api_position || player.position}
                               </div>
-
-                              {/* Name + overall */}
                               <div className="rp-info">
-                                <span className="rp-name">
-                                  {player.short_name || player.name}
-                                </span>
-                                <span className="rp-overall">
-                                  {player.overall}
-                                </span>
+                                <span className="rp-name">{player.short_name || player.name}</span>
+                                <span className="rp-overall">{player.overall}</span>
                               </div>
-
-                              {/* Stamina projections */}
                               {!isExcluded && (
                                 <div className="rp-stamina">
                                   <div className="rp-stamina-item">
                                     <span className="rp-stamina-label">60'</span>
-                                    <span
-                                      className="rp-stamina-value"
-                                      style={{ color: getStaminaColor(stamina60) }}
-                                    >
+                                    <span className="rp-stamina-value" style={{ color: getStaminaColor(stamina60) }}>
                                       {stamina60}%
                                     </span>
                                   </div>
                                   <div className="rp-stamina-item">
                                     <span className="rp-stamina-label">90'</span>
-                                    <span
-                                      className="rp-stamina-value"
-                                      style={{ color: getStaminaColor(stamina90) }}
-                                    >
+                                    <span className="rp-stamina-value" style={{ color: getStaminaColor(stamina90) }}>
                                       {stamina90}%
                                     </span>
                                   </div>
-                                  {isRedline && (
-                                    <span className="rp-redline-flag">⚠ Redline</span>
-                                  )}
+                                  {isRedline && <span className="rp-redline-flag">⚠ Redline</span>}
                                 </div>
                               )}
-
-                              {/* Status buttons */}
                               <div className="rp-status">
                                 <span className="status-legend">STATUS</span>
                                 {[
@@ -504,7 +630,6 @@ export default function Planner() {
                   )
                 )}
 
-                {/* Footer */}
                 {excludedPlayers.length > 0 && (
                   <div className="readiness-footer">
                     Excluded: {excludedPlayers.join(', ')}
@@ -519,11 +644,162 @@ export default function Planner() {
         {/* ── XI BUILDER ── */}
         {activeTab === 'builder' && (
           <div className="tab-builder">
-            <div className="tab-placeholder">
-              <span>⚽</span>
-              <h3>XI Builder</h3>
-              <p>Drag players onto the pitch to set your
-                 starting lineup. Coming in Sprint 3.</p>
+
+            {/* Builder controls */}
+            <div className="builder-controls">
+              <div className="builder-formation-label">FORMATION</div>
+              <div className="builder-formation-pills">
+                {['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1'].map(f => (
+                  <button
+                    key={f}
+                    className={`toggle-pill ${builderFormation === f ? 'active' : ''}`}
+                    onClick={() => { setBuilderFormation(f); setBuiltXI({}) }}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <div className="builder-actions">
+                <button className="builder-clear-btn" onClick={() => setBuiltXI({})}>
+                  Clear XI
+                </button>
+                <button
+                  className="builder-load-btn"
+                  disabled={placedCount < 11}
+                  onClick={handleLoadIntoConsole}
+                >
+                  ⚡ Load into Console
+                </button>
+              </div>
+            </div>
+
+            {/* Progress */}
+            <div className="builder-progress">
+              <span className="builder-progress-count">{placedCount}/11</span>
+              <span className="builder-progress-label">players placed</span>
+              {placedCount === 11 && (
+                <span className="builder-complete">✓ XI Complete — ready to load</span>
+              )}
+            </div>
+
+            {/* Main layout */}
+            <div className="builder-layout">
+
+              {/* LEFT — Pitch */}
+              <div className="builder-pitch-wrapper">
+                <div className="builder-pitch">
+                  {BUILDER_SLOTS[builderFormation].map(slotDef => {
+                    const player = builtXI[slotDef.key]
+                    return (
+                      <div
+                        key={slotDef.key}
+                        className={`builder-slot ${player ? 'filled' : 'empty'}`}
+                        style={{
+                          position: 'absolute',
+                          left: slotDef.left,
+                          top: slotDef.top,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => {
+                          e.preventDefault()
+                          if (!draggedPlayer) return
+                          if (!isCompatibleForSlot(draggedPlayer, slotDef.slot)) {
+                            e.currentTarget.classList.add('invalid')
+                            setTimeout(() => e.currentTarget.classList.remove('invalid'), 600)
+                            return
+                          }
+                          const existingKey = Object.keys(builtXI)
+                            .find(k => builtXI[k]?.name === draggedPlayer.name)
+                          if (existingKey) {
+                            const displaced = builtXI[slotDef.key]
+                            setBuiltXI(prev => ({
+                              ...prev,
+                              [existingKey]: displaced || null,
+                              [slotDef.key]: draggedPlayer,
+                            }))
+                          } else {
+                            setBuiltXI(prev => ({ ...prev, [slotDef.key]: draggedPlayer }))
+                          }
+                          setDraggedPlayer(null)
+                        }}
+                      >
+                        {player ? (
+                          <div
+                            className="builder-filled-card"
+                            draggable
+                            onDragStart={() => setDraggedPlayer(player)}
+                            onClick={() => setBuiltXI(prev => ({ ...prev, [slotDef.key]: null }))}
+                          >
+                            <span className="bfc-slot">{slotDef.slot}</span>
+                            <span className="bfc-overall">{player.overall}</span>
+                            <span className="bfc-name">{getSurname(player.short_name || player.name)}</span>
+                            <div className="bfc-remove">×</div>
+                          </div>
+                        ) : (
+                          <div className="builder-empty-slot">
+                            <span className="bes-slot">{slotDef.slot}</span>
+                            <span className="bes-hint">drop here</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* RIGHT — Squad list */}
+              <div className="builder-squad-list">
+                <div className="bsl-header">SQUAD — drag to pitch</div>
+
+                <input
+                  className="bsl-search"
+                  placeholder="Search player..."
+                  onChange={e => setBslSearch(e.target.value.toLowerCase())}
+                />
+
+                <div className="bsl-filter">
+                  {['ALL', 'GK', 'DEF', 'MID', 'ATT'].map(f => (
+                    <button
+                      key={f}
+                      className={`bsl-filter-btn ${bslFilter === f ? 'active' : ''}`}
+                      onClick={() => setBslFilter(f)}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bsl-players">
+                  {availablePlayers
+                    .filter(p => {
+                      const name = (p.short_name || p.name).toLowerCase()
+                      const matchSearch = !bslSearch || name.includes(bslSearch)
+                      const pos = p.api_position || 'CM'
+                      const matchFilter =
+                        bslFilter === 'ALL' ||
+                        (bslFilter === 'GK'  && pos === 'GK') ||
+                        (bslFilter === 'DEF' && ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) ||
+                        (bslFilter === 'MID' && ['CDM', 'CM', 'LM', 'RM', 'CAM', 'LAM', 'RAM'].includes(pos)) ||
+                        (bslFilter === 'ATT' && ['ST', 'CF', 'LW', 'RW'].includes(pos))
+                      return matchSearch && matchFilter
+                    })
+                    .map(player => (
+                      <div
+                        key={player.name}
+                        className="bsl-player-row"
+                        draggable
+                        onDragStart={() => setDraggedPlayer(player)}
+                      >
+                        <span className="bsl-pos">{player.api_position}</span>
+                        <span className="bsl-name">{player.short_name || player.name}</span>
+                        <span className="bsl-ovr">{player.overall}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+
             </div>
           </div>
         )}
