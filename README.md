@@ -120,8 +120,12 @@ See LICENSE file for full terms.
 Unauthorised use, copying, or distribution is strictly prohibited.
 
 ## Author
-Harishraghavendran Balaji
-Built with Claude Code (Anthropic) — 2025
+Harishraghavendran Balaji — 2025
+
+## Acknowledgements
+Vishal.M — for critiquing and shaping the original
+Soccer Subbu concept in 2023, which became the
+foundation for SubHub.
 
 ---
 SubHub is not affiliated with EA Sports, football-data.org, BSD, or any football club or governing body.
