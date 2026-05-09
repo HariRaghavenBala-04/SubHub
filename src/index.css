@@ -386,6 +386,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 12px;
   display: flex;
   align-items: center;
+  justify-content: center;
   margin-top: auto;
   z-index: 2;
 }
@@ -398,7 +399,9 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   letter-spacing: 0.3px;
   white-space: nowrap;
-  display: inline-block;
+  display: block;
+  text-align: center;
+  width: 100%;
 }
 
 @keyframes pingPongScroll {

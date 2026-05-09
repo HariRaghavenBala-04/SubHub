@@ -189,7 +189,7 @@ export default function PlayerCard({
         {/* Player name — ping-pong marquee when name overflows card */}
         {(() => {
           const nameWidth = displayName.length * 5.5
-          const cardUsableWidth = 60
+          const cardUsableWidth = 77  // ~14 chars × 5.5px
           const overflows = nameWidth > cardUsableWidth
           const scrollPx = overflows ? Math.round(nameWidth - cardUsableWidth) : 0
           return (
@@ -199,6 +199,9 @@ export default function PlayerCard({
                 style={overflows ? {
                   '--scroll-px': `-${scrollPx}px`,
                   animation: 'pingPongScroll 3.5s ease-in-out infinite',
+                  display: 'inline-block',
+                  width: 'auto',
+                  textAlign: 'left',
                 } : {}}
               >
                 {displayName}
