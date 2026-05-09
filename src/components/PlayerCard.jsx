@@ -188,14 +188,9 @@ export default function PlayerCard({
 
         {/* Player name */}
         <div className="card-name-wrapper">
-          {displayName.length > 10 ? (
-            <div className="card-name-scroll">
-              <span>{displayName}&nbsp;&nbsp;&nbsp;</span>
-              <span>{displayName}&nbsp;&nbsp;&nbsp;</span>
-            </div>
-          ) : (
-            <span className="card-name-static">{displayName}</span>
-          )}
+          <span className={displayName.length > 10 ? 'card-name-pivot' : 'card-name-static'}>
+            {displayName}
+          </span>
         </div>
 
         {/* Stamina bar */}
