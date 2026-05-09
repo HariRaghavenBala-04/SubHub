@@ -1290,3 +1290,26 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   line-height: 1.5;
 }
+
+.status-legend-bar {
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 10px;
+  font-family: 'Rajdhani', sans-serif;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.5px;
+  flex-wrap: wrap;
+}
+
+.status-legend {
+  font-size: 8px;
+  color: rgba(255,255,255,0.2);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 1px;
+  margin-right: 4px;
+  align-self: center;
+}

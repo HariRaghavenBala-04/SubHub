@@ -401,6 +401,15 @@ export default function Planner() {
                   </div>
                 )}
 
+                {/* Status legend bar */}
+                <div className="status-legend-bar">
+                  <span>🟢 Available</span>
+                  <span>🔴 Injured</span>
+                  <span>🟡 Doubtful</span>
+                  <span>🟠 Suspended</span>
+                  <span>🔵 Managed mins</span>
+                </div>
+
                 {/* Player groups */}
                 {Object.entries(groupedSquad).map(([group, players]) =>
                   players.length > 0 && (
@@ -469,18 +478,19 @@ export default function Planner() {
 
                               {/* Status buttons */}
                               <div className="rp-status">
+                                <span className="status-legend">STATUS</span>
                                 {[
-                                  ['available', '🟢'],
-                                  ['injured',   '🔴'],
-                                  ['doubtful',  '🟡'],
-                                  ['suspended', '🟠'],
-                                  ['managed',   '🔵'],
-                                ].map(([s, icon]) => (
+                                  ['available', '🟢', 'Available — fully fit'],
+                                  ['injured',   '🔴', 'Injured — excluded from subs'],
+                                  ['doubtful',  '🟡', 'Doubtful — 50/50 fitness'],
+                                  ['suspended', '🟠', 'Suspended — excluded from subs'],
+                                  ['managed',   '🔵', 'Managed — limited minutes'],
+                                ].map(([s, icon, tip]) => (
                                   <button
                                     key={s}
                                     className={`status-btn status-${s} ${status === s ? 'active' : ''}`}
                                     onClick={() => updateStatus(player.name, s)}
-                                    title={s.charAt(0).toUpperCase() + s.slice(1)}
+                                    title={tip}
                                   >
                                     {icon}
                                   </button>
