@@ -250,6 +250,68 @@ _SELECTION_ORDER: list[str] = [
 
 # ── FC26 stats lookup — name only, no club filtering ──────────────────────
 
+# Exact API name → FC26 short_name overrides.
+# Checked before any fuzzy logic; avoids wrong-player matches.
+MANUAL_NAME_MAP: dict[str, str] = {
+    "Joe Gomez":               "J. Gomez",
+    "Alisson Becker":          "Alisson",
+    "Virgil van Dijk":         "V. van Dijk",
+    "Trent Alexander-Arnold":  "T. Alexander-Arnold",
+    "Alexis Mac Allister":     "A. Mac Allister",
+    "Mohamed Salah":           "M. Salah",
+    "Ibrahima Konaté":         "I. Konaté",
+    "Ryan Gravenberch":        "R. Gravenberch",
+    "Andrew Robertson":        "A. Robertson",
+    "Dominik Szoboszlai":      "D. Szoboszlai",
+    "Cody Gakpo":              "C. Gakpo",
+    "Conor Bradley":           "C. Bradley",
+    "Curtis Jones":            "C. Jones",
+    "Manuel Neuer":            "M. Neuer",
+    "Harry Kane":              "H. Kane",
+    "Jamal Musiala":           "J. Musiala",
+    "Serge Gnabry":            "S. Gnabry",
+    "Joshua Kimmich":          "J. Kimmich",
+    "Leon Goretzka":           "L. Goretzka",
+    "Dayot Upamecano":         "D. Upamecano",
+    "Alphonso Davies":         "A. Davies",
+    "Kingsley Coman":          "K. Coman",
+    "Raphaël Guerreiro":       "R. Guerreiro",
+    "João Palhinha":           "J. Palhinha",
+    "Vinicius Junior":         "Vini Jr.",
+    "Kylian Mbappé":           "K. Mbappé",
+    "Jude Bellingham":         "J. Bellingham",
+    "Federico Valverde":       "F. Valverde",
+    "Aurélien Tchouaméni":     "A. Tchouaméni",
+    "Eduardo Camavinga":       "E. Camavinga",
+    "Éder Militão":            "É. Militão",
+    "Antonio Rüdiger":         "A. Rüdiger",
+    "David Alaba":             "D. Alaba",
+    "Dani Carvajal":           "D. Carvajal",
+    "Thibaut Courtois":        "T. Courtois",
+    "Ferland Mendy":           "F. Mendy",
+    "Rodrygo":                 "Rodrygo",
+    "Robert Lewandowski":      "R. Lewandowski",
+    "Frenkie de Jong":         "F. de Jong",
+    "Marc-André ter Stegen":   "M. ter Stegen",
+    "Ronald Araújo":           "R. Araújo",
+    "Jules Koundé":            "J. Koundé",
+    "Alejandro Balde":         "A. Balde",
+    "Ilkay Gündogan":          "İ. Gündogan",
+    "Raphinha":                "Raphinha",
+    "Pedri":                   "Pedri",
+    "Gavi":                    "Gavi",
+    "Jan Oblak":               "J. Oblak",
+    "Antoine Griezmann":       "A. Griezmann",
+    "Koke":                    "Koke",
+    "Thomas Lemar":            "T. Lemar",
+    "Marcos Llorente":         "M. Llorente",
+    "Stefan Savić":            "S. Savić",
+    "José María Giménez":      "J.M. Giménez",
+    "Casemiro":                "Casemiro",
+    "Ederson":                 "Ederson",
+    "Alisson":                 "Alisson",
+}
+
 _abbrev_re = __import__("re").compile(r"^[a-z]\.")
 
 def _names_compatible(api_norm: str, fc26_norm: str) -> bool:
@@ -311,7 +373,15 @@ def _find_fc26(api_name: str) -> dict | None:
     def _row(fc26_key: str) -> dict:
         return FC26_DF[FC26_DF["_name_lower"] == fc26_key].iloc[0].to_dict()
 
-    # 1. Manual map
+    # 0. MANUAL_NAME_MAP — exact API name → FC26 short_name (highest priority)
+    mapped = MANUAL_NAME_MAP.get(api_name)
+    if mapped:
+        exact = FC26_DF[FC26_DF["short_name"] == mapped]
+        if not exact.empty:
+            print(f"[FC26] {api_name!r} → manual → {mapped!r}")
+            return exact.iloc[0].to_dict()
+
+    # 1. Legacy normalised manual map
     if name_q_norm in _MANUAL_MAP:
         target = _MANUAL_MAP[name_q_norm]
         if target is None:
