@@ -382,43 +382,45 @@ h1, h2, h3, h4, h5, h6 {
 .card-name-wrapper {
   width: 100%;
   overflow: hidden;
+  height: 12px;
+  display: flex;
+  align-items: center;
   margin-top: auto;
-  padding: 0 2px;
   z-index: 2;
 }
 
-.card-name {
-  font-size: 7.5px;
+.card-name-static {
+  font-size: 8px;
   font-weight: 700;
-  color: var(--card-text);
+  color: #f5e6c8;
   text-transform: uppercase;
+  font-family: 'Rajdhani', sans-serif;
   letter-spacing: 0.3px;
   white-space: nowrap;
-  font-family: 'Rajdhani', sans-serif;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  display: block;
   width: 100%;
+  text-align: center;
 }
 
-.card-name.long-name {
-  animation: nameScroll 4s linear infinite;
+.card-name-scroll {
+  display: flex;
+  white-space: nowrap;
+  animation: seamlessScroll 4s linear infinite;
   animation-play-state: paused;
-  display: inline-block;
-  padding-right: 16px;
-  text-overflow: clip;
-  overflow: visible;
+  font-size: 8px;
+  font-weight: 700;
+  color: #f5e6c8;
+  text-transform: uppercase;
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.3px;
 }
 
-.player-card:hover .card-name.long-name,
-.bench-card:hover  .card-name.long-name,
-.reserve-card:hover .card-name.long-name {
+.player-card:hover .card-name-scroll {
   animation-play-state: running;
 }
 
-.bench-card .card-name,
-.reserve-card .card-name {
-  font-size: 6.5px;
+@keyframes seamlessScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 .card-stamina-bar {

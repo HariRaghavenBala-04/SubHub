@@ -88,7 +88,6 @@ export default function PlayerCard({
 
   // Display surname only (compact)
   const displayName = getSurname(name)
-  const nameClass   = `card-name${displayName.length > 10 ? ' long-name' : ''}`
 
   // Stamina fill class
   const staminaFillClass =
@@ -189,16 +188,14 @@ export default function PlayerCard({
 
         {/* Player name */}
         <div className="card-name-wrapper">
-          <span
-            className={nameClass}
-            style={{
-              fontSize: 8, fontWeight: 700, color: '#f5e6c8',
-              fontFamily: "'Rajdhani', sans-serif",
-              textTransform: 'uppercase', textAlign: 'center',
-              width: '100%', maxWidth: 64, overflow: 'hidden',
-              textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
-            }}
-          >{displayName}</span>
+          {displayName.length > 10 ? (
+            <div className="card-name-scroll">
+              <span>{displayName}&nbsp;&nbsp;&nbsp;</span>
+              <span>{displayName}&nbsp;&nbsp;&nbsp;</span>
+            </div>
+          ) : (
+            <span className="card-name-static">{displayName}</span>
+          )}
         </div>
 
         {/* Stamina bar */}
