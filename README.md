@@ -120,11 +120,11 @@ See LICENSE file for full terms.
 Unauthorised use, copying, or distribution is strictly prohibited.
 
 ## Author
-Harishraghavendran Balaji — 2025
+Harishraghavendran Balaji — 2026
 
 ## Acknowledgements
 Vishal.M — for critiquing and shaping the original
-Soccer Subbu concept in 2023, which became the
+project code named "Soccer Subbu" in 2023, which became the
 foundation for SubHub.
 
 ---
