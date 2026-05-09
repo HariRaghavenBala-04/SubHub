@@ -926,7 +926,7 @@ def build_player_from_fc26_row(row) -> dict:
         pos_ratings[col] = _int(row.get(col, 60))
 
     overall = _int(row.get("overall", 70))
-    name    = str(row.get("long_name", row.get("short_name", "Unknown")))
+    name    = str(row.get("short_name", "Unknown"))
 
     return {
         # Identity

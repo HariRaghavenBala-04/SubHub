@@ -6,6 +6,7 @@
 SubHub FastAPI Backend — FC26-powered engine
 """
 import os
+import time
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,9 @@ from .engine.squad_builder    import build_squad, build_squad_fc26
 from .engine.formation_slots  import reassign_for_formation, FORMATION_SLOTS
 
 load_dotenv()
+
+_squad_cache: dict = {}
+_CACHE_TTL = 600  # 10 minutes
 
 app = FastAPI(title="SubHub API", version="2.0.0")
 
@@ -161,6 +165,11 @@ async def get_squad(
     league_code: str = "PL",
     formation: str = "4-3-3",
 ):
+    cache_key = f"{team_id}_{formation}"
+    cached = _squad_cache.get(cache_key)
+    if cached and time.time() - cached["ts"] < _CACHE_TTL:
+        return cached["data"]
+
     # Step 1: fetch team name + crest from football-data.org (lightweight call)
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
@@ -197,7 +206,7 @@ async def get_squad(
         print(f"  {p.get('short_name', p['name']):<22} "
               f"pos={p['api_position']:<5} ovr={p['overall']}")
 
-    return {
+    response = {
         "team": {
             "id":       team_id,
             "name":     team_name,
@@ -213,6 +222,8 @@ async def get_squad(
             "unmatched_count": 0,
         },
     }
+    _squad_cache[cache_key] = {"data": response, "ts": time.time()}
+    return response
 
 
 @app.get("/api/squad-comparison")
