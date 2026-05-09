@@ -70,8 +70,8 @@ const UEFA_ELIGIBILITY = {
   65:   'UCL',   // Man City
   67:   'UCL',   // Newcastle
   73:   'UCL',   // Tottenham
-  354:  'UEL',   // Crystal Palace
-  351:  'UECL',  // Nottingham Forest
+  354:  'UECL',  // Crystal Palace
+  351:  'UEL',   // Nottingham Forest
 
   // GERMANY
   3:    'UCL',   // Leverkusen
