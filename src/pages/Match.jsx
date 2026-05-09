@@ -16,7 +16,7 @@ import RecommendPanel from '../components/RecommendPanel'
 import PlayerCard from '../components/PlayerCard'
 import { useTeam } from '../context/TeamContext'
 import { FORMATIONS, FORMATION_KEYS } from '../data/formations'
-import { computeStamina, computeClientRecs } from '../utils/football'
+import { computeStamina, computeClientRecs, isCompatibleDrop } from '../utils/football'
 
 const INTENTS = [
   { value: 'protect_lead', label: '🛡 Protect Lead' },
@@ -67,11 +67,17 @@ export default function Match() {
   const [shouldReanalyse, setShouldReanalyse] = useState(false)
 
   // Drag state
-  const [activeDrag,  setActiveDrag]  = useState(null)
-  const [swapFlashIdx, setFlashIdx]   = useState(null)
-  const [manualSwaps, setManualSwaps] = useState(new Set())
-  const flashTimer    = useRef(null)
+  const [activeDrag,      setActiveDrag]      = useState(null)
+  const [swapFlashIdx,    setFlashIdx]         = useState(null)
+  const [invalidFlashIdx, setInvalidFlashIdx]  = useState(null)
+  const [manualSwaps,     setManualSwaps]      = useState(new Set())
+  const flashTimer       = useRef(null)
   const handleAnalyseRef = useRef(null)
+
+  // Bench expand / formation preview
+  const [benchExpanded,     setBenchExpanded]     = useState(false)
+  const [previewFormation,  setPreviewFormation]  = useState(null)
+  const [previewPos,        setPreviewPos]        = useState({ x: 0, y: 0 })
 
   // Stale-data disclaimer (Rule 7)
   const [showDisclaimer, setShowDisclaimer] = useState(
@@ -154,11 +160,16 @@ export default function Match() {
     }
   }
 
-  // ── Flash helper ──────────────────────────────────────────────────────
+  // ── Flash helpers ─────────────────────────────────────────────────────
   function flashGreen(idx) {
     clearTimeout(flashTimer.current)
     setFlashIdx(idx)
     flashTimer.current = setTimeout(() => setFlashIdx(null), 900)
+  }
+
+  function flashInvalid(idx) {
+    setInvalidFlashIdx(idx)
+    setTimeout(() => setInvalidFlashIdx(null), 600)
   }
 
   // ── Swap helpers ──────────────────────────────────────────────────────
@@ -199,6 +210,73 @@ export default function Match() {
     setBenchPlayers(nb)
   }
 
+  // ── Reserve ↔ pitch / bench swap helpers ──────────────────────────────
+
+  function doReserveToPitch(reserveIdx, pitchIdx) {
+    const reservePlayer = reservePlayers[reserveIdx]
+    const pitchPlayer   = pitchPlayers[pitchIdx]
+    if (!reservePlayer) return
+    const targetSlot = pitchPlayer?.assigned_slot || pitchPlayer?.position || 'CM'
+    if (!isCompatibleDrop(reservePlayer.position, targetSlot)) {
+      showToast(`⚠ ${reservePlayer.name?.split(' ').pop() ?? 'Player'} can't play ${targetSlot}`)
+      flashInvalid(pitchIdx)
+      return
+    }
+    const np = [...pitchPlayers]
+    const nr = [...reservePlayers]
+    np[pitchIdx] = { ...reservePlayer }
+    nr.splice(reserveIdx, 1)
+    if (pitchPlayer) nr.push(pitchPlayer)
+    setPitchPlayers(np)
+    setReservePlayers(nr)
+    flashGreen(pitchIdx)
+    showToast(`${reservePlayer.name?.split(' ').pop()} moved to pitch`)
+  }
+
+  function doReserveToBench(reserveIdx, benchIdx) {
+    const reservePlayer = reservePlayers[reserveIdx]
+    if (!reservePlayer) return
+    const nb = [...benchPlayers]
+    const nr = [...reservePlayers]
+    const benchPlayer = nb[benchIdx]
+    nb[benchIdx] = { ...reservePlayer }
+    nr.splice(reserveIdx, 1)
+    if (benchPlayer) nr.push(benchPlayer)
+    setBenchPlayers(nb)
+    setReservePlayers(nr)
+    showToast(`${reservePlayer.name?.split(' ').pop()} added to bench`)
+  }
+
+  function doPitchToReserve(pitchIdx, reserveIdx) {
+    const np = [...pitchPlayers]
+    const nr = [...reservePlayers]
+    const pitchPlayer   = np[pitchIdx]
+    const reservePlayer = nr[reserveIdx]
+    np[pitchIdx] = reservePlayer ? { ...reservePlayer } : null
+    if (reservePlayer) nr.splice(reserveIdx, 1, pitchPlayer)
+    else if (pitchPlayer) nr.push(pitchPlayer)
+    setPitchPlayers(np)
+    setReservePlayers(nr)
+  }
+
+  function doBenchToReserve(benchIdx, reserveIdx) {
+    const nb = [...benchPlayers]
+    const nr = [...reservePlayers]
+    const benchPlayer   = nb[benchIdx]
+    const reservePlayer = nr[reserveIdx]
+    nb[benchIdx] = reservePlayer ? { ...reservePlayer } : null
+    if (reservePlayer) nr.splice(reserveIdx, 1, benchPlayer)
+    else if (benchPlayer) nr.push(benchPlayer)
+    setBenchPlayers(nb)
+    setReservePlayers(nr)
+  }
+
+  function doReserveToReserve(fromIdx, toIdx) {
+    const nr = [...reservePlayers]
+    ;[nr[fromIdx], nr[toIdx]] = [nr[toIdx], nr[fromIdx]]
+    setReservePlayers(nr)
+  }
+
   // ── dnd-kit handlers ──────────────────────────────────────────────────
   function handleDragStart({ active }) {
     setActiveDrag(active.data.current)
@@ -207,17 +285,34 @@ export default function Match() {
   function handleDragEnd({ active, over }) {
     setActiveDrag(null)
     if (!over) return
-    const { from, fromIndex } = active.data.current
+    const { from, fromIndex, player: draggedPlayer } = active.data.current
     const toId = over.id
 
     if (toId.startsWith('pitch-')) {
       const toIdx = parseInt(toId.slice(6))
-      if (from === 'bench') doBenchToPitch(fromIndex, toIdx)
-      else if (from === 'pitch' && fromIndex !== toIdx) doPitchToPitch(fromIndex, toIdx)
+      if (from === 'bench') {
+        const targetSlot = pitchPlayers[toIdx]?.assigned_slot || pitchPlayers[toIdx]?.position || 'CM'
+        if (!isCompatibleDrop(draggedPlayer?.position, targetSlot)) {
+          showToast(`⚠ ${draggedPlayer?.name?.split(' ').pop() ?? 'Player'} can't play ${targetSlot}`)
+          flashInvalid(toIdx)
+          return
+        }
+        doBenchToPitch(fromIndex, toIdx)
+      } else if (from === 'pitch' && fromIndex !== toIdx) {
+        doPitchToPitch(fromIndex, toIdx)
+      } else if (from === 'reserve') {
+        doReserveToPitch(fromIndex, toIdx)
+      }
     } else if (toId.startsWith('bench-')) {
       const toIdx = parseInt(toId.slice(6))
       if (from === 'pitch') doPitchToBench(fromIndex, toIdx)
       else if (from === 'bench' && fromIndex !== toIdx) doBenchToBench(fromIndex, toIdx)
+      else if (from === 'reserve') doReserveToBench(fromIndex, toIdx)
+    } else if (toId.startsWith('reserve-')) {
+      const toIdx = parseInt(toId.slice(8))
+      if (from === 'pitch') doPitchToReserve(fromIndex, toIdx)
+      else if (from === 'bench') doBenchToReserve(fromIndex, toIdx)
+      else if (from === 'reserve' && fromIndex !== toIdx) doReserveToReserve(fromIndex, toIdx)
     }
   }
 
@@ -484,13 +579,19 @@ export default function Match() {
             ))}
           </div>
 
-          {/* Formation toggle */}
+          {/* Formation toggle + preview */}
           <div style={{ display: 'flex', gap: 3 }}>
             {FORMATION_KEYS.map(f => (
               <button
                 key={f}
                 onClick={() => handleFormationChange(f)}
                 className={`toggle-pill${formation === f ? ' active' : ''}`}
+                onMouseEnter={e => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setPreviewFormation(f)
+                  setPreviewPos({ x: rect.left, y: rect.bottom + 8 })
+                }}
+                onMouseLeave={() => setPreviewFormation(null)}
               >{f}</button>
             ))}
           </div>
@@ -585,25 +686,27 @@ export default function Match() {
                 formation={formationSlots}
                 highlightOffId={highlightOff}
                 swapFlashIdx={swapFlashIdx}
+                invalidFlashIdx={invalidFlashIdx}
                 onPlayerClick={p => setHighOff(prev => prev === p.id ? null : p.id)}
                 subArrow={showPanel ? subArrow : null}
               />
-              {/* Matchday bench — sub candidates (ranks 12-18) */}
+              {/* Matchday bench — collapsible on hover */}
               <BenchRow
                 bench={enrichedBench}
                 label="MATCHDAY BENCH"
-                labelColour="#00ff87"
+                labelColour="var(--card-gold-top)"
                 highlightId={highlightOn}
                 onSelect={p => setHighOn(prev => prev === p.id ? null : p.id)}
+                collapsible
               />
-              {/* Squad / reserves (ranks 19+) — hover "+" to promote to bench */}
+              {/* Squad / reserves — collapsible, hover "+" to promote */}
               {enrichedReserves.length > 0 && (
                 <BenchRow
                   bench={enrichedReserves}
                   label="SQUAD"
-                  labelColour="#6b7a8d"
-                  opacity={0.6}
+                  labelColour="var(--muted)"
                   onAdd={addReserveToBench}
+                  collapsible
                 />
               )}
             </div>
@@ -644,18 +747,31 @@ export default function Match() {
         )}
       </div>
 
+      {/* Formation preview overlay */}
+      {previewFormation && (
+        <FormationPreviewOverlay
+          formation={previewFormation}
+          currentFormation={formation}
+          pos={previewPos}
+        />
+      )}
+
       {/* Toast notification */}
       {toast && (
         <div style={{
           position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,255,135,0.14)', border: '1px solid rgba(0,255,135,0.45)',
+          background: toast.startsWith('⚠')
+            ? 'rgba(255,61,61,0.12)' : 'rgba(0,255,135,0.14)',
+          border: toast.startsWith('⚠')
+            ? '1px solid rgba(255,61,61,0.45)' : '1px solid rgba(0,255,135,0.45)',
           borderRadius: 8, padding: '8px 22px', zIndex: 9999,
           fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 13,
-          color: 'var(--green)', letterSpacing: '0.07em',
+          color: toast.startsWith('⚠') ? 'var(--red)' : 'var(--green)',
+          letterSpacing: '0.07em',
           boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
           pointerEvents: 'none',
         }}>
-          ✓ {toast}
+          {toast.startsWith('⚠') ? toast : `✓ ${toast}`}
         </div>
       )}
 
@@ -685,6 +801,39 @@ function ScoreInput({ value, onChange }) {
         outline: 'none',
       }}
     />
+  )
+}
+
+function FormationPreviewOverlay({ formation, currentFormation, pos }) {
+  const positions        = FORMATIONS[formation]?.positions        ?? []
+  const currentPositions = FORMATIONS[currentFormation]?.positions ?? []
+  const isSame = formation === currentFormation
+
+  return (
+    <div
+      className="formation-preview"
+      style={{ left: pos.x, top: pos.y }}
+    >
+      <div className="preview-pitch">
+        {/* Current formation dots (white, only when different) */}
+        {!isSame && currentPositions.map((p, i) => (
+          <div
+            key={`cur-${i}`}
+            className="preview-dot-current"
+            style={{ left: `${p.left}%`, top: `${p.top}%` }}
+          />
+        ))}
+        {/* Preview formation dots (gold) */}
+        {positions.map((p, i) => (
+          <div
+            key={`new-${i}`}
+            className="preview-dot-new"
+            style={{ left: `${p.left}%`, top: `${p.top}%` }}
+          />
+        ))}
+      </div>
+      <div className="preview-label">{formation}</div>
+    </div>
   )
 }
 

@@ -21,6 +21,7 @@ export default function Pitch({
   formation    = [],
   highlightOffId,
   swapFlashIdx,
+  invalidFlashIdx,
   onPlayerClick,
   subArrow,
 }) {
@@ -30,6 +31,11 @@ export default function Pitch({
     stamina_pct: pitchPlayers[i]?.stamina_pct ?? 80,
     player: pitchPlayers[i] ?? null,
   }))
+
+  // Pass highlighted slot to FormationLines when sub panel is open
+  const highlightSlots = highlightOffId
+    ? positioned.filter(p => p.player?.id === highlightOffId).map(p => p.slot)
+    : []
 
   return (
     <div style={{
@@ -42,8 +48,8 @@ export default function Pitch({
       <StadiumGlow />
       <PitchMarkings />
 
-      {/* Formation connection lines — clipped inside pitch */}
-      <FormationLines players={positioned} />
+      {/* Formation connection lines — chemistry-colored */}
+      <FormationLines players={positioned} highlightSlots={highlightSlots} />
 
       {/* Sub arrow */}
       {subArrow && <SubArrow {...subArrow} />}
@@ -59,6 +65,7 @@ export default function Pitch({
           player={pos.player}
           isHighlightOff={pos.player?.id === highlightOffId}
           isFlash={swapFlashIdx === i}
+          isInvalidFlash={invalidFlashIdx === i}
           onPlayerClick={onPlayerClick}
         />
       ))}
@@ -68,7 +75,7 @@ export default function Pitch({
 
 // ── Individual droppable + draggable pitch slot ───────────────────────────
 
-function PitchSlot({ index, left, top, slot, player, isHighlightOff, isFlash, onPlayerClick }) {
+function PitchSlot({ index, left, top, slot, player, isHighlightOff, isFlash, isInvalidFlash, onPlayerClick }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: `pitch-${index}` })
 
   return (
@@ -101,7 +108,7 @@ function PitchSlot({ index, left, top, slot, player, isHighlightOff, isFlash, on
           onClick={() => onPlayerClick?.(player)}
         />
       ) : (
-        <EmptySlot label={slot} />
+        <EmptySlot label={slot} isInvalidFlash={isInvalidFlash} />
       )}
     </div>
   )
@@ -133,16 +140,22 @@ export function DraggableCard({ player, id, from, fromIndex, size = 'normal', hi
 
 // ── Empty slot placeholder ─────────────────────────────────────────────────
 
-function EmptySlot({ label }) {
+function EmptySlot({ label, isInvalidFlash }) {
   return (
-    <div style={{
-      width: 88, height: 104,
-      border: '1.5px dashed rgba(255,255,255,0.15)',
-      borderRadius: 10, display: 'flex',
-      alignItems: 'center', justifyContent: 'center',
-      color: 'var(--muted)', fontSize: 11,
-      fontFamily: 'Rajdhani', fontWeight: 600,
-    }}>
+    <div
+      className={isInvalidFlash ? 'slot-invalid-flash' : ''}
+      style={{
+        width: 72, height: 90,
+        border: isInvalidFlash
+          ? '1.5px dashed rgba(255,61,61,0.6)'
+          : '1.5px dashed rgba(200,150,60,0.2)',
+        borderRadius: 6, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        color: isInvalidFlash ? 'rgba(255,61,61,0.7)' : 'rgba(200,150,60,0.3)',
+        fontSize: 11,
+        fontFamily: 'Rajdhani', fontWeight: 600,
+      }}
+    >
       {label}
     </div>
   )
@@ -205,16 +218,17 @@ function SubArrow({ fromLeft, fromTop, toLeft, toTop }) {
   return (
     <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
       <defs>
-        <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L7,3 z" fill="var(--green)" />
+        <marker id="arr-gold" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L7,3 z" fill="#f0c060" />
         </marker>
       </defs>
       <line
         x1={`${fromLeft}%`} y1={`${fromTop}%`}
         x2={`${toLeft}%`}   y2={`${toTop}%`}
-        stroke="var(--green)" strokeWidth="2"
-        strokeDasharray="8 4" markerEnd="url(#arr)"
-        style={{ animation: 'dashFlow 0.8s linear infinite' }}
+        stroke="#f0c060" strokeWidth="2.5"
+        strokeDasharray="2000" strokeDashoffset="2000"
+        markerEnd="url(#arr-gold)"
+        style={{ animation: 'drawLine 0.8s ease forwards' }}
       />
     </svg>
   )

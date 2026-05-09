@@ -140,6 +140,105 @@ export function splitSquad(squad) {
 }
 
 /** Client-side fallback recommender — uses sub_off/sub_on field names matching backend */
+// ── Position group helpers for drop validation ────────────────────────────
+
+const _GROUPS = {
+  GK:  ['GK'],
+  DEF: ['CB','LCB','RCB','LB','RB','LWB','RWB','FB'],
+  MID: ['CDM','DM','CM','LCM','RCM','LM','RM','LAM','CAM','RAM','AM'],
+  ATT: ['ST','CF','LW','RW','W','SS'],
+}
+
+function _group(pos) {
+  const p = (pos || 'CM').toUpperCase()
+  for (const [g, members] of Object.entries(_GROUPS)) {
+    if (members.includes(p)) return g
+  }
+  return 'MID'
+}
+
+/**
+ * Returns true if a player at `playerPos` is tactically compatible
+ * filling a `targetSlot`. Prevents DEF↔ATT swaps and GK mismatches.
+ */
+export function isCompatibleDrop(playerPos, targetSlot) {
+  if (!playerPos || !targetSlot) return true
+  const pp = (playerPos || '').toUpperCase()
+  const ts = (targetSlot || '').toUpperCase()
+  if (ts === 'GK') return pp === 'GK'
+  if (pp === 'GK') return false
+  const pg = _group(pp)
+  const sg = _group(ts)
+  if (pg === 'DEF' && sg === 'ATT') return false
+  if (pg === 'ATT' && sg === 'DEF') return false
+  return true
+}
+
+// ── Player archetype inference from FC26 attributes ───────────────────────
+
+export function getPlayerArchetype(player) {
+  if (!player) return { label: 'Player', icon: '⚽' }
+
+  const pace       = player.pace                        || 65
+  const shooting   = player.shooting                    || 65
+  const passing    = player.passing                     || 65
+  const dribbling  = player.dribbling                   || 65
+  const defending  = player.defending                   || 65
+  const physic     = player.physic                      || 65
+  const vision     = player.mentality_vision            || 65
+  const stamina    = player.power_stamina               || 65
+  const finishing  = player.attacking_finishing         || 65
+  const heading    = player.attacking_heading_accuracy  || 65
+  const strength   = player.power_strength              || 65
+  const aggression = player.mentality_aggression        || 65
+  const intercept  = player.mentality_interceptions     || 65
+  const sprint     = player.movement_sprint_speed       || 65
+  const positioning= player.mentality_positioning       || 65
+
+  const pos = (player.api_position || player.position || 'CM').toUpperCase()
+
+  if (pos === 'GK') return { label: 'Goalkeeper', icon: '🧤' }
+
+  if (['CB','LCB','RCB','LB','RB','LWB','RWB','FB'].includes(pos)) {
+    if (pace > 80 && sprint > 80)           return { label: 'Marauding',   icon: '⚡' }
+    if (defending > 85 && strength > 80)    return { label: 'Rock Solid',  icon: '🛡' }
+    if (passing > 80 && vision > 78)        return { label: 'Ball Playing', icon: '🎯' }
+    return { label: 'Defender', icon: '🛡' }
+  }
+
+  if (['CDM','DM','CM','LM','RM','LCM','RCM'].includes(pos)) {
+    if (stamina > 85 && aggression > 78 && intercept > 78) return { label: 'Engine',    icon: '⚙️' }
+    if (vision > 85 && passing > 85)                        return { label: 'Playmaker', icon: '🧠' }
+    if (pace > 80 && dribbling > 80)                        return { label: 'Box-to-Box',icon: '💨' }
+    if (defending > 78 && intercept > 78)                   return { label: 'Enforcer',  icon: '💪' }
+    return { label: 'Midfielder', icon: '⚙️' }
+  }
+
+  if (['CAM','LAM','RAM','AM'].includes(pos)) {
+    if (vision > 87 && passing > 85)     return { label: 'Creator',        icon: '🎨' }
+    if (dribbling > 85 && pace > 80)     return { label: 'Dribbler',       icon: '💨' }
+    if (finishing > 82)                  return { label: 'Second Striker',  icon: '⚡' }
+    return { label: 'Playmaker', icon: '🧠' }
+  }
+
+  if (['LW','RW','W'].includes(pos)) {
+    if (pace > 88 && sprint > 88)            return { label: 'Pace Merchant',   icon: '⚡' }
+    if (dribbling > 85 && finishing > 80)    return { label: 'Inverted Winger', icon: '🎯' }
+    if (passing > 80 && vision > 78)         return { label: 'Wide Creator',    icon: '🎨' }
+    return { label: 'Winger', icon: '💨' }
+  }
+
+  if (['ST','CF','SS'].includes(pos)) {
+    if (finishing > 88 && positioning > 85)  return { label: 'Clinical',     icon: '🎯' }
+    if (pace > 85 && sprint > 85)            return { label: 'Pace Striker', icon: '⚡' }
+    if (heading > 80 && strength > 80)       return { label: 'Target Man',   icon: '💪' }
+    if (dribbling > 82 && vision > 80)       return { label: 'False 9',      icon: '🧠' }
+    return { label: 'Striker', icon: '⚡' }
+  }
+
+  return { label: 'Player', icon: '⚽' }
+}
+
 export function computeClientRecs(pitchPlayers, benchPlayers, intent, manualSwapIds = new Set()) {
   const PRIO = {
     protect_lead:   ['CB','LCB','RCB','CDM','DM','GK','LB','RB','FB','CM','LW','RW','W','ST'],
