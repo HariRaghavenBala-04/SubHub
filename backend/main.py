@@ -21,8 +21,47 @@ from .engine.formation_slots  import reassign_for_formation, FORMATION_SLOTS
 
 load_dotenv()
 
-_squad_cache: dict = {}
-_CACHE_TTL = 600  # 10 minutes
+# ── Two-level cache ────────────────────────────────────────────────────────
+
+_cache: dict = {}
+_CACHE_TTL = {
+    "teams":     900,   # 15 mins — league teams rarely change
+    "squad":     600,   # 10 mins — squads don't change mid-session
+    "team_meta": 3600,  # 1 hour  — team name/badge never changes
+}
+
+
+def cache_get(key: str):
+    entry = _cache.get(key)
+    if not entry:
+        return None
+    if time.time() - entry["ts"] > entry["ttl"]:
+        del _cache[key]
+        return None
+    return entry["data"]
+
+
+def cache_set(key: str, data, ttl: int) -> None:
+    _cache[key] = {"data": data, "ts": time.time(), "ttl": ttl}
+
+
+# ── Retry wrapper for football-data.org ───────────────────────────────────
+
+async def _api_get(url: str, params: dict | None = None, retries: int = 3):
+    """GET with exponential back-off on 429."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        for attempt in range(retries):
+            resp = await client.get(url, headers=FD_HEADERS, params=params)
+            if resp.status_code == 429:
+                wait = 12 * (attempt + 1)
+                print(f"[API] Rate limited — waiting {wait}s (attempt {attempt + 1}/{retries})")
+                time.sleep(wait)
+                continue
+            return resp
+    raise HTTPException(429, "API rate limit — please wait 60 seconds and try again")
+
+
+# ── App ───────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="SubHub API", version="2.0.0")
 
@@ -142,21 +181,30 @@ async def get_competitions():
 async def get_teams(league_code: str):
     if league_code not in LEAGUE_CODES:
         raise HTTPException(404, "Unknown league code")
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{FD_BASE}/competitions/{league_code}/teams",
-            headers=FD_HEADERS,
-            params={"season": 2025},
-        )
+
+    cache_key = f"teams_{league_code}"
+    cached = cache_get(cache_key)
+    if cached:
+        print(f"[Cache] HIT {cache_key}")
+        return cached
+    print(f"[Cache] MISS {cache_key}")
+
+    resp = await _api_get(
+        f"{FD_BASE}/competitions/{league_code}/teams",
+        params={"season": 2025},
+    )
     if resp.status_code != 200:
         raise HTTPException(resp.status_code, "football-data.org error")
-    return [
+
+    result = [
         {"id": t["id"], "name": t["name"],
          "shortName": t.get("shortName", t["name"]),
          "tla": t.get("tla", ""),
          "crestUrl": t.get("crest", "")}
         for t in resp.json().get("teams", [])
     ]
+    cache_set(cache_key, result, _CACHE_TTL["teams"])
+    return result
 
 
 @app.get("/api/squad/{team_id}")
@@ -165,24 +213,29 @@ async def get_squad(
     league_code: str = "PL",
     formation: str = "4-3-3",
 ):
-    cache_key = f"{team_id}_{formation}"
-    cached = _squad_cache.get(cache_key)
-    if cached and time.time() - cached["ts"] < _CACHE_TTL:
-        return cached["data"]
+    cache_key = f"squad_{team_id}_{formation}"
+    cached = cache_get(cache_key)
+    if cached:
+        print(f"[Cache] HIT {cache_key}")
+        return cached
+    print(f"[Cache] MISS {cache_key}")
 
-    # Step 1: fetch team name + crest from football-data.org (lightweight call)
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{FD_BASE}/teams/{team_id}",
-            headers=FD_HEADERS,
-            params={"season": 2025},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(resp.status_code, "football-data.org error")
+    # Step 1: fetch team name + crest — cached separately so formation
+    # changes reuse the meta without hitting the API again.
+    meta_key = f"team_meta_{team_id}"
+    meta = cache_get(meta_key)
+    if meta:
+        print(f"[Cache] HIT {meta_key}")
+    else:
+        print(f"[Cache] MISS {meta_key}")
+        resp = await _api_get(f"{FD_BASE}/teams/{team_id}", params={"season": 2025})
+        if resp.status_code != 200:
+            raise HTTPException(resp.status_code, "football-data.org error")
+        meta = resp.json()
+        cache_set(meta_key, meta, _CACHE_TTL["team_meta"])
 
-    data      = resp.json()
-    team_name = data.get("name", "")
-    crest_url = data.get("crest", "")
+    team_name = meta.get("name", "")
+    crest_url = meta.get("crest", "")
 
     # Step 2: build squad entirely from FC26 club data
     result = build_squad_fc26(team_name, formation)
@@ -222,7 +275,7 @@ async def get_squad(
             "unmatched_count": 0,
         },
     }
-    _squad_cache[cache_key] = {"data": response, "ts": time.time()}
+    cache_set(cache_key, response, _CACHE_TTL["squad"])
     return response
 
 
