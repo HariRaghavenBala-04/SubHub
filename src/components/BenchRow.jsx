@@ -3,38 +3,53 @@
  */
 import { useDroppable } from '@dnd-kit/core'
 import { DraggableCard } from './Pitch'
+import PlayerCard from './PlayerCard'
 
 /**
  * Props:
  *  bench          : array of player objects
+ *  label          : row label string (default 'BENCH')
+ *  labelColour    : CSS colour for the label (default 'var(--muted)')
+ *  opacity        : wrapper opacity (default 1 — use 0.6 for reserves)
  *  highlightId    : player id to pulse green
- *  onSelect       : fn(player)
+ *  onSelect       : fn(player) — omit for display-only rows
  */
-export default function BenchRow({ bench = [], highlightId, onSelect }) {
+export default function BenchRow({
+  bench = [],
+  label = 'BENCH',
+  labelColour = 'var(--muted)',
+  opacity = 1,
+  highlightId,
+  onSelect,
+}) {
   return (
-    <div style={{ width: '100%', marginTop: 8, flexShrink: 0 }}>
+    <div style={{ width: '100%', marginTop: 8, flexShrink: 0, opacity }}>
       <div style={{
-        fontSize: 10, letterSpacing: '0.14em', color: 'var(--muted)',
+        fontSize: 10, letterSpacing: '0.14em', color: labelColour,
         fontFamily: 'Rajdhani', fontWeight: 600, marginBottom: 5,
         textTransform: 'uppercase', paddingLeft: 2,
       }}>
-        Bench
+        {label}
       </div>
       <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 4 }}>
         {bench.map((p, i) => (
-          <BenchSlot key={p?.id ?? i} index={i} player={p} highlightId={highlightId} onSelect={onSelect} />
+          <BenchSlot
+            key={p?.id ?? i} index={i} player={p}
+            highlightId={highlightId} onSelect={onSelect}
+            interactive={!!onSelect}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function BenchSlot({ index, player, highlightId, onSelect }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `bench-${index}` })
+function BenchSlot({ index, player, highlightId, onSelect, interactive }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `bench-${index}`, disabled: !interactive })
 
   return (
     <div
-      ref={setNodeRef}
+      ref={interactive ? setNodeRef : undefined}
       style={{
         position: 'relative', borderRadius: 10, flexShrink: 0,
         border: isOver ? '1.5px dashed rgba(0,255,135,0.7)' : '1.5px solid transparent',
@@ -43,15 +58,19 @@ function BenchSlot({ index, player, highlightId, onSelect }) {
       }}
     >
       {player ? (
-        <DraggableCard
-          player={player}
-          id={`bench-player-${index}`}
-          from="bench"
-          fromIndex={index}
-          size="small"
-          highlight={player.id === highlightId ? 'green' : 'none'}
-          onClick={() => onSelect?.(player)}
-        />
+        interactive ? (
+          <DraggableCard
+            player={player}
+            id={`bench-player-${index}`}
+            from="bench"
+            fromIndex={index}
+            size="small"
+            highlight={player.id === highlightId ? 'green' : 'none'}
+            onClick={() => onSelect?.(player)}
+          />
+        ) : (
+          <PlayerCard player={player} size="small" />
+        )
       ) : (
         <div style={{
           width: 72, height: 86, border: '1px dashed rgba(255,255,255,0.1)',

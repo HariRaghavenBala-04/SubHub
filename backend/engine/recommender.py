@@ -1,3 +1,7 @@
+# SubHub — Football Substitution Intelligence Engine
+# Copyright (c) 2025 Harishraghavendran Balaji. All Rights Reserved.
+# Unauthorised copying, distribution, or use is strictly prohibited.
+# See LICENSE file for full terms.
 """
 Master Recommender — Sprint 5 Intelligence Layer.
 Ties all 5 modules together: playstyle profiles, pressing reliability,

@@ -285,7 +285,7 @@ function ScenarioTab({ xi, bench }) {
       const fallback = {}
       for (const sc of SCENARIOS) {
         const subs = computeClientRecs(enrichedXi, bench, sc.intent)
-        const avg  = subs.length ? subs.reduce((s, r) => s + r.impact_score, 0) / subs.length : 50
+        const avg  = subs.length ? subs.reduce((s, r) => s + (r.sub_on?.impact_score ?? 50), 0) / subs.length : 50
         fallback[sc.key] = {
           intent: sc.intent,
           top2_subs: subs.slice(0, 2),
@@ -419,7 +419,11 @@ function ScenarioColumn({ sc, result, xiAtMinute, bench }) {
         </div>
       )}
       {(result.top2_subs ?? []).map((sub, i) => {
-        const conf = confidenceLevel(sub.stamina_pct, sub.position_valid)
+        const conf   = (sub.sub_on?.confidence || sub.confidence || 'LOW').toUpperCase()
+        const staPct = sub.sub_off?.stamina_pct ?? sub.stamina_pct ?? 0
+        const impact = sub.sub_on?.impact_score ?? sub.impact_score ?? 0
+        const compat = sub.position_compatibility ?? 'direct'
+        const valid  = compat === 'direct' || compat === 'safe'
         return (
           <div key={i} style={{
             background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
@@ -427,9 +431,9 @@ function ScenarioColumn({ sc, result, xiAtMinute, bench }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
-                <span style={{ color: 'var(--red)' }}>▼ {sub.subOff?.name?.split(' ').pop()}</span>
+                <span style={{ color: 'var(--red)' }}>▼ {(sub.sub_off?.name ?? sub.subOff?.name)?.split(' ').pop()}</span>
                 <span style={{ color: 'var(--muted)', margin: '0 4px', fontSize: 10 }}>→</span>
-                <span style={{ color: 'var(--green)' }}>▲ {sub.subOn?.name?.split(' ').pop()}</span>
+                <span style={{ color: 'var(--green)' }}>▲ {(sub.sub_on?.name ?? sub.subOn?.name)?.split(' ').pop()}</span>
               </span>
               <ConfBadge level={conf} />
             </div>
@@ -437,10 +441,10 @@ function ScenarioColumn({ sc, result, xiAtMinute, bench }) {
               {sub.reasoning}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 9, color: 'var(--red)' }}>{sub.stamina_pct}% sta</span>
-              <span style={{ fontSize: 9, color: 'var(--green)' }}>Impact {sub.impact_score}</span>
-              <span style={{ fontSize: 9, color: sub.position_valid ? 'var(--green)' : 'var(--amber)' }}>
-                {sub.position_valid ? '✓ valid' : '⚠ mismatch'}
+              <span style={{ fontSize: 9, color: 'var(--red)' }}>{Math.round(staPct)}% sta</span>
+              <span style={{ fontSize: 9, color: 'var(--green)' }}>Impact {Math.round(impact)}</span>
+              <span style={{ fontSize: 9, color: valid ? 'var(--green)' : 'var(--amber)' }}>
+                {valid ? '✓ valid' : '⚠ mismatch'}
               </span>
             </div>
           </div>
@@ -481,7 +485,7 @@ function ScenarioColumn({ sc, result, xiAtMinute, bench }) {
                     → suggested target: {target.name?.split(' ').pop()} ({target.position}, {target.stamina_pct}% sta)
                   </span>
                   <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>
-                    Impact comparison: Override={overridePlayer.impact_score ?? '—'} vs Rec={result.top2_subs?.[0]?.subOn?.impact_score ?? '—'}
+                    Impact comparison: Override={overridePlayer.impact_score ?? '—'} vs Rec={result.top2_subs?.[0]?.sub_on?.impact_score ?? result.top2_subs?.[0]?.subOn?.impact_score ?? '—'}
                   </div>
                 </>
               ) : (

@@ -1,3 +1,9 @@
+/*
+ * SubHub — Football Substitution Intelligence Engine
+ * Copyright (c) 2025 Harishraghavendran Balaji. All Rights Reserved.
+ * Unauthorised copying, distribution, or use is strictly prohibited.
+ * See LICENSE file for full terms.
+ */
 /**
  * Slide-in recommendation panel — top-3 subs with FC26 enrichment + Apply Sub.
  *
@@ -290,8 +296,8 @@ function AttrRow({ row }) {
       <span style={{ color: 'var(--muted)', minWidth: 52, textTransform: 'capitalize' }}>{attr}</span>
       <span style={{ color: 'rgba(255,255,255,0.45)' }}>{starter_val}</span>
       <span style={{ color: 'var(--muted)', fontSize: 7 }}>→</span>
-      <span style={{ color, fontWeight: 700 }}>{bench_val}</span>
-      <span style={{ color, fontWeight: 700 }}>{arrow}</span>
+      <span style={{ color: colour, fontWeight: 700 }}>{bench_val}</span>
+      <span style={{ color: colour, fontWeight: 700 }}>{arrow}</span>
       {delta !== undefined && (
         <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 7.5 }}>({delta > 0 ? '+' : ''}{delta})</span>
       )}

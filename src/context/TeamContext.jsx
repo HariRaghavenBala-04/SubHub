@@ -1,5 +1,10 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
-import { splitSquad } from '../utils/football'
+/*
+ * SubHub — Football Substitution Intelligence Engine
+ * Copyright (c) 2025 Harishraghavendran Balaji. All Rights Reserved.
+ * Unauthorised copying, distribution, or use is strictly prohibited.
+ * See LICENSE file for full terms.
+ */
+import { createContext, useContext, useState, useCallback } from 'react'
 
 const TeamContext = createContext(null)
 
@@ -7,7 +12,6 @@ export function TeamProvider({ children }) {
   const [selectedTeam, setSelectedTeamState] = useState(() => {
     try { return JSON.parse(localStorage.getItem('selectedTeam')) ?? null } catch { return null }
   })
-  const cache = useRef({})
 
   const setSelectedTeam = useCallback((team) => {
     setSelectedTeamState(team)
@@ -15,16 +19,15 @@ export function TeamProvider({ children }) {
   }, [])
 
   const fetchSquad = useCallback(async (teamId, leagueCode = 'PL') => {
-    const key = `${teamId}-${leagueCode}`
-    if (cache.current[key]) return cache.current[key]
     const res = await fetch(`/api/squad/${teamId}?league_code=${leagueCode}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    // Pre-split squad into XI + bench
-    const { xi, bench } = splitSquad(data.squad ?? [])
-    const enriched = { ...data, xi, bench }
-    cache.current[key] = enriched
-    return enriched
+    return {
+      ...data,
+      xi:       data.starting_xi ?? [],
+      bench:    data.bench       ?? [],
+      reserves: data.reserves    ?? [],
+    }
   }, [])
 
   return (

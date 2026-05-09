@@ -1,3 +1,9 @@
+/*
+ * SubHub — Football Substitution Intelligence Engine
+ * Copyright (c) 2025 Harishraghavendran Balaji. All Rights Reserved.
+ * Unauthorised copying, distribution, or use is strictly prohibited.
+ * See LICENSE file for full terms.
+ */
 import { Routes, Route } from 'react-router-dom'
 import { TeamProvider } from './context/TeamContext'
 import Home from './pages/Home'

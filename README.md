@@ -1,165 +1,127 @@
-<!--
-Copyright (c) 2025 Harish Raghavendran Balaji. All rights reserved.
-This project and its contents are proprietary and confidential.
-Unauthorised copying, distribution, or use of this software,
-via any medium, is strictly prohibited without express written
-permission from the author.
--->
-
 # SubHub ⚽ — Football Substitution Intelligence Engine
 
-## Overview
+> Copyright (c) 2025 Harishraghavendran Balaji. All Rights Reserved.
+> This is proprietary software. See LICENSE for full terms.
 
-SubHub is an AI-powered football substitution intelligence engine that helps managers and analysts make data-driven substitution decisions in real time. It combines stamina decay modelling, historical impact scoring, and formation constraints to surface the optimal substitutions at any given moment in a match.
+---
+
+## Overview
+SubHub is a football substitution intelligence engine that helps managers and coaches make smarter, data-driven substitution decisions. Built with a FIFA 15 Ultimate Team inspired Console interface and powered by a multi-signal intelligence engine covering 7 major European leagues.
 
 ## Features
-
-- **Live Pitch View** — FIFA 15-inspired squad screen with player cards on a CSS football pitch
-- **Stamina Decay Engine** — Position-aware fatigue modelling with fixture congestion modifiers
-- **Expected Impact Scoring** — Historical win-rate weighting from last 20 matches per team
-- **Formation Constraints** — Valid positional cover matrix with tactical intent modes
-- **Scenario Planner** — Simulate winning/drawing/losing scenarios with win-probability delta
-- **7 Top Leagues** — Premier League, Bundesliga, La Liga, Serie A, Ligue 1, Primeira Liga, Eredivisie
-- **Real Squad Data** — Live rosters via football-data.org API
+- 🏟 Live squad data across 7 leagues (Premier League, Bundesliga, La Liga, Serie A, Ligue 1, Primeira Liga, Eredivisie)
+- ⚽ FIFA 15 inspired pitch Console with formation toggle
+- 🧠 6 Playstyle profiles (High Press, Positional Play, Low Block, Counter Attack, Direct Play, Structured Press)
+- ⚡ Formation-Playstyle compatibility matrix with tactical conflict detection and win probability modifiers
+- 📊 4-signal Intelligence Engine:
+  - Pressing Reliability Score (physicality layer)
+  - Attribute Upgrade Delta (position-specific comparison)
+  - Game State Context Engine (match situation awareness)
+  - Monte Carlo Confidence Scores (200 simulations per recommendation)
+- 🎯 ANALYSE SUBS button with sliding recommendation panel
+- 🚑 Injury Management tab with urgency tiers
+- 📋 Scenario Planner (Winning / Drawing / Losing simulation)
+- 🔒 Position group locking (GKs never play CM, CBs never play ST)
+- ⚠ Tactical conflict warnings in real time
 
 ## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + Vite, React Router v6, Tailwind CSS |
-| Backend | FastAPI (Python 3.11+) |
-| Fonts | Rajdhani (headings), DM Sans (body) via Google Fonts |
-| APIs | football-data.org, sports.bzzoiro.com |
+- Frontend: React + Vite + Tailwind CSS + React Router + @dnd-kit
+- Backend: FastAPI (Python)
+- Data: football-data.org API + FC26 dataset + BSD sports API
+- Intelligence: scipy, numpy, difflib
 
 ## Getting Started
 
-```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd subhub
+### Prerequisites
+- Node.js 18+
+- Python 3.10+
+- API keys (see API Keys section below)
 
-# 2. Set up environment variables
+### Installation
+```
+git clone https://github.com/HariRaghavenBala-04/SubHub.git
+cd SubHub
 cp .env.example .env
-# Fill in your API keys in .env
-
-# 3. Install frontend dependencies
-npm install
-
-# 4. Install backend dependencies
-cd backend
+# Add your API keys to .env
 pip install -r requirements.txt
-cd ..
-
-# 5. Start the backend
-uvicorn backend.main:app --reload --port 8000
-
-# 6. Start the frontend (in a new terminal)
-npm run dev
+cd frontend && npm install
 ```
 
-Open http://localhost:5173 in your browser.
+### Running
+```
+# Terminal 1 — Backend
+python3 -m uvicorn backend.main:app --reload --port 8000
 
-## API Keys
+# Terminal 2 — Frontend
+cd frontend && npm run dev
+```
 
-- **football-data.org** — https://www.football-data.org/ (Free tier available)
-- **BSD Sports API** — https://sports.bzzoiro.com/ (Token authentication)
+### API Keys Required
+- football-data.org — register free at https://www.football-data.org
+- BSD API — register free at https://sports.bzzoiro.com
+- Add both keys to your .env file (see .env.example for format)
 
 ## Project Structure
-
 ```
-subhub/
+SubHub/
 ├── backend/
-│   ├── main.py              # FastAPI app, CORS, routes
-│   ├── requirements.txt
-│   └── engine/
-│       ├── expected_impact.py    # Historical impact scoring
-│       ├── stamina_decay.py      # Position-aware fatigue model
-│       ├── formation_constraints.py  # Positional cover matrix
-│       ├── recommender.py        # Top-3 sub recommendation engine
-│       └── scenario_planner.py   # W/D/L scenario simulation
-├── src/
-│   ├── main.jsx
-│   ├── App.jsx
-│   ├── index.css
-│   ├── pages/
-│   │   ├── Home.jsx          # League selector (7 leagues)
-│   │   ├── League.jsx        # Team badge grid
-│   │   ├── Squad.jsx         # Player cards with stamina/impact
-│   │   ├── Match.jsx         # FIFA 15 pitch view (hero feature)
-│   │   └── Planner.jsx       # Drag-and-drop scenario planner
-│   └── components/
-│       ├── PlayerCard.jsx
-│       ├── Pitch.jsx
-│       ├── FormationLines.jsx
-│       ├── RecommendPanel.jsx
-│       └── BenchRow.jsx
-├── .env.example
-├── .gitignore
-├── index.html
-├── vite.config.js
-├── tailwind.config.js
-└── package.json
+│   ├── engine/
+│   │   ├── playstyle_profiles.py   — 6 tactical playstyles + compatibility matrix
+│   │   ├── recommender.py          — Master intelligence engine
+│   │   ├── monte_carlo.py          — 200-simulation confidence scoring
+│   │   ├── pressing_reliability.py — Physicality and press scoring
+│   │   ├── upgrade_delta.py        — Position-specific attribute comparison
+│   │   ├── game_state.py           — Match context and tactical need analysis
+│   │   ├── squad_builder.py        — API + FC26 data merger and XI builder
+│   │   └── formation_slots.py      — Optimal position assignment engine
+│   └── main.py                     — FastAPI routes
+├── frontend/
+│   └── src/
+│       ├── pages/                  — League, Squad, Match Console, Planner
+│       ├── components/             — Pitch, PlayerCard, RecommendPanel
+│       └── context/                — TeamContext (squad state management)
+├── data/                           — FC26 CSV (not committed — add manually)
+├── .env.example                    — API key template
+├── LICENSE                         — All Rights Reserved
+└── README.md
 ```
 
-## Core Models
+## Core Intelligence Models
 
-### Expected Impact Score
-Calculated from the last 20 finished matches per team. Substitution incidents are extracted from match events and scored as:
+### Pressing Reliability Score
+Calculates how reliably a player maintains pressing intensity at any given minute using FC26 pace, stamina, aggression and work rate attributes. Decays with fatigue. Flags tactical fatigue before physical fatigue is visible.
 
-```
-impact_score = (wins + 0.5 * draws after sub) / appearances * 100
-```
+### Attribute Upgrade Delta
+Compares bench player attributes vs the starter they would replace across 5 position-specific key attributes. Derived from original research on positional performance metrics. Returns clear upgrade, marginal upgrade, sideways sub, or downgrade verdict.
 
-Time weighting: <15 mins remaining = 0.5x, 15–30 mins = 0.75x, 30+ mins = 1.0x
+### Formation-Playstyle Compatibility
+A 6x6 matrix scoring every playstyle-formation combination from 0-100. Scores below 50 trigger a tactical conflict warning with win probability modifier. Example: High Press + 5-3-2 scores 25/100 — the back 5 destroys the numerical superiority required for gegenpressing.
 
-### Stamina Decay Model
-Position-specific decay rates applied to minutes played with fixture congestion modifiers:
+### Monte Carlo Confidence
+Runs 200 simulated game outcomes for each potential substitution. Factors in stamina state, pressing reliability, attribute upgrade score, historical impact score and game state urgency multiplier. Returns win probability delta and confidence tier (HIGH / MEDIUM / LOW).
 
-| Position | Decay Rate |
-|----------|-----------|
-| GK | 0.20 |
-| CB | 0.30 |
-| FB | 0.35 |
-| DM | 0.40 |
-| CM | 0.45 |
-| W  | 0.55 |
-| ST | 0.60 |
-
-Fixture modifier: <4 days since last match = 1.3x, injury return = 1.6x
-
-```
-stamina_pct = max(0, 100 - (decay_rate × minutes_played × fixture_modifier))
-```
-
-### Formation Constraints
-Valid positional coverage matrix ensures tactical coherence:
-
-```
-ST  → [ST, SS, W]
-W   → [W, AM, ST, FB]
-AM  → [AM, CM, W]
-CM  → [CM, DM, AM]
-DM  → [DM, CM, CB]
-FB  → [FB, DM, W]
-CB  → [CB, DM, FB]
-GK  → [GK]
-```
-
-Tactical intent modes: **Protect Lead** (prioritise CB/DM), **Chase Game** (prioritise ST/W/AM), **Tactical** (rank by impact score only)
+## Data Sources
+- football-data.org: Current 2025/26 squad rosters
+- FC26 dataset: Player positional ratings and attributes (not included in repo — download separately)
+- BSD API: Match incidents and substitution history
+- Note: Free tier API data may not reflect transfers after July 2025
 
 ## Roadmap
-
-- [ ] Real-time match data via WebSockets
-- [ ] xG delta post-substitution analysis
-- [ ] Opposition weak-spot targeting
-- [ ] Export PDF match report
-- [ ] Mobile app (React Native)
-- [ ] Multi-language support
+- [ ] Real-time match data integration
+- [ ] xG and xT trend analysis per 10-minute window
+- [ ] Export recommendations to PDF report
+- [ ] Mobile responsive layout
+- [ ] Manual player override for missing transfers
+- [ ] Additional league support (MLS, Brasileirao)
 
 ## License
-
-All Rights Reserved. See [LICENSE](LICENSE).
+All Rights Reserved — This is proprietary software.
+See LICENSE file for full terms.
+Unauthorised use, copying, or distribution is strictly prohibited.
 
 ## Author
+Harishraghavendran Balaji
+Built with Claude Code (Anthropic) — 2025
 
-Harish Raghavendran Balaji
+---
+SubHub is not affiliated with EA Sports, football-data.org, BSD, or any football club or governing body.
