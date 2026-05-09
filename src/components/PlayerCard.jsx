@@ -2,7 +2,22 @@
  * PlayerCard — FIFA Rare Gold card design.
  * size: 'normal' → pitch card (72×90), 'small' → bench card (60×76), 'reserve' → reserve card (52×66)
  */
-import { staminaColour, getPlayerArchetype, getSurname, isLongSurname } from '../utils/football'
+import { staminaColour, getPlayerArchetype } from '../utils/football'
+
+function getSurname(name) {
+  if (!name) return ''
+  const parts = name.trim().split(' ')
+  if (parts.length === 1)
+    return parts[0].toUpperCase()
+  const prefixes = ['van','de','di','da','mac','mc',
+                    'dos','del','der','le','la']
+  if (parts.length >= 3) {
+    const secondLast = parts[parts.length - 2].toLowerCase()
+    if (prefixes.includes(secondLast))
+      return parts.slice(-2).join(' ').toUpperCase()
+  }
+  return parts[parts.length - 1].toUpperCase()
+}
 
 const RADIUS = 14
 const CIRC   = 2 * Math.PI * RADIUS
@@ -73,8 +88,7 @@ export default function PlayerCard({
 
   // Display surname only (compact)
   const displayName = getSurname(name)
-  const isLong      = isLongSurname(name)
-  const nameClass   = `card-name${isLong ? ' long-name' : ''}`
+  const nameClass   = `card-name${displayName.length > 10 ? ' long-name' : ''}`
 
   // Stamina fill class
   const staminaFillClass =
@@ -175,7 +189,16 @@ export default function PlayerCard({
 
         {/* Player name */}
         <div className="card-name-wrapper">
-          <span className={nameClass}>{displayName}</span>
+          <span
+            className={nameClass}
+            style={{
+              fontSize: 8, fontWeight: 700, color: '#f5e6c8',
+              fontFamily: "'Rajdhani', sans-serif",
+              textTransform: 'uppercase', textAlign: 'center',
+              width: '100%', maxWidth: 64, overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+            }}
+          >{displayName}</span>
         </div>
 
         {/* Stamina bar */}
