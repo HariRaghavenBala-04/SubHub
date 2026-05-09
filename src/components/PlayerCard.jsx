@@ -186,25 +186,38 @@ export default function PlayerCard({
           </div>
         )}
 
-        {/* Player name — ping-pong marquee when name overflows card */}
+        {/* Player name — adaptive font size + ping-pong for very long names */}
         {(() => {
-          const nameWidth = displayName.length * 5.5
-          const cardUsableWidth = 77  // ~14 chars × 5.5px
-          const overflows = nameWidth > cardUsableWidth
+          const surname = displayName
+          const overflows = surname.length > 13
+          const nameWidth = surname.length * 5.5
+          const cardUsableWidth = 77
           const scrollPx = overflows ? Math.round(nameWidth - cardUsableWidth) : 0
+
+          function getNameFontSize(s) {
+            const len = s.length
+            if (len <= 8)  return '8.5px'
+            if (len <= 11) return '7.5px'
+            if (len <= 14) return '6.5px'
+            return '8px'
+          }
+
           return (
             <div className="card-name-wrapper">
               <span
                 className="card-name-text"
-                style={overflows ? {
-                  '--scroll-px': `-${scrollPx}px`,
-                  animation: 'pingPongScroll 3.5s ease-in-out infinite',
-                  display: 'inline-block',
-                  width: 'auto',
-                  textAlign: 'left',
-                } : {}}
+                style={{
+                  fontSize: getNameFontSize(surname),
+                  ...(overflows ? {
+                    '--scroll-px': `-${scrollPx}px`,
+                    animation: 'pingPongScroll 3.5s ease-in-out infinite',
+                    display: 'inline-block',
+                    width: 'auto',
+                    textAlign: 'left',
+                  } : {}),
+                }}
               >
-                {displayName}
+                {surname}
               </span>
             </div>
           )
