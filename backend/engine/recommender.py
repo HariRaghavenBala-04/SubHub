@@ -38,6 +38,66 @@ def _get_group(pos: str) -> str:
     return "MID"
 
 
+def _urgency_at(minute: int) -> str:
+    if minute >= 80:   return "CRITICAL"
+    if minute >= 70:   return "HIGH"
+    if minute >= 60:   return "MEDIUM"
+    return "LOW"
+
+
+def _scenario_bench_filter(
+    game_state:     dict,
+    minute:         int,
+    manager_intent: str,
+    is_injured:     bool,
+) -> set | None:
+    """
+    Hard filter: returns the set of position GROUPS allowed for sub-ON players.
+    None = no restriction (gs_bonus handles preference softly).
+    Injured candidates bypass this — adjacent rule still applies.
+    """
+    if is_injured:
+        return None
+
+    state = game_state["state"]
+
+    # Manager intent takes priority over game state
+    if manager_intent == "protect_lead" and minute > 60:
+        return {"DEF", "MID"}
+    if manager_intent == "chase_game":
+        return {"ATT", "MID"}
+
+    # Scenario rules
+    if state == "comfortable_win" and minute > 70:
+        return {"DEF", "MID"}                      # ATT hard-excluded
+    if state == "narrow_win" and minute > 75:
+        return {"DEF", "MID"}                      # ATT excluded (stamina-critical exception checked per-candidate)
+    if state in ("narrow_loss", "losing_badly") and minute > 60:
+        return {"ATT", "MID"}                      # DEF excluded unless injury
+    if state == "drawing" and minute > 70:
+        return {"ATT", "MID", "DEF"}               # no hard exclusion; gs_bonus handles rest
+
+    return None                                    # no restriction
+
+
+def _timing_advice(candidate: dict, minute: int, game_state: dict) -> str:
+    """Per-candidate sub-timing hint shown on the recommendation card."""
+    stamina         = candidate.get("stamina_pct", 100)
+    current_urgency = game_state["urgency"]
+    future_minute   = min(minute + 15, 90)
+    future_urgency  = _urgency_at(future_minute)
+
+    if stamina < 40:
+        return f"⚡ Sub now — stamina critical at {stamina:.0f}%"
+    if stamina < 55 and minute < 80:
+        return f"⚠ Sub by {min(minute + 10, 90)}' — stamina will be critical"
+    if current_urgency in ("CRITICAL", "HIGH"):
+        return "⚡ Sub now — urgency is high"
+    if future_urgency in ("CRITICAL", "HIGH") and current_urgency in ("LOW", "MEDIUM"):
+        return f"⏱ Can wait — urgency rises at ~{future_minute}'"
+    return "⏱ Optimal timing: now"
+
+
 # ── Main entry point ───────────────────────────────────────────────────────
 
 def get_recommendations(
@@ -90,7 +150,7 @@ def get_recommendations(
             stamina_pct    = stamina_result["stamina_pct"]
             stamina_status = stamina_result["stamina_status"]
         except Exception:
-            stamina_pct    = max(0.0, 100.0 - minute * 0.4)
+            stamina_pct    = max(0.0, 100.0 - minute * 0.45)
             stamina_status = "UNKNOWN"
 
         press  = calculate_pressing_reliability(player, stamina_pct, playstyle)
@@ -158,12 +218,28 @@ def get_recommendations(
         cand_group = _get_group(cand_slot)
         allowed    = ADJACENT.get(cand_group, ["MID"])
 
+        # Scenario hard-filter: which groups are allowed to come ON?
+        scenario_groups = _scenario_bench_filter(
+            game_state, minute, manager_intent, candidate["is_injured"]
+        )
+
         for bp in bench:
             if bp.get("name") in used_bench:
                 continue
 
             bp_pos   = bp.get("position", "CM")
             bp_group = _get_group(bp_pos)
+
+            # ── Scenario hard-filter (applied BEFORE positional compatibility) ──
+            if scenario_groups is not None and bp_group not in scenario_groups:
+                # Narrow-win exception: allow ATT if the starter is stamina-critical
+                if not (
+                    game_state["state"] == "narrow_win"
+                    and minute > 75
+                    and candidate["stamina_pct"] < 40
+                    and bp_group == "ATT"
+                ):
+                    continue   # hard exclude — wrong context for this scenario
 
             # Filter by positional compatibility
             if bp_group not in allowed:
@@ -260,6 +336,8 @@ def get_recommendations(
             game_state, sub_lang,
         )
 
+        timing = _timing_advice(candidate, minute, game_state)
+
         recommendations.append({
             "rank": len(recommendations) + 1,
             "sub_off": {
@@ -285,6 +363,7 @@ def get_recommendations(
             "monte_carlo":    best["mc"],
             "compatibility":  best["compat_risk"],
             "reasoning":      reasoning,
+            "timing_advice":  timing,
             "game_context":   game_state["tactical_description"],
         })
 

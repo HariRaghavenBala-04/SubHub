@@ -41,12 +41,15 @@ export default function Match() {
   const [error,          setError]          = useState(null)
 
   // Match controls
-  const [formation,  setFormation]  = useState('4-3-3')
-  const [minute,     setMinute]     = useState(60)
-  const [homeScore,  setHomeScore]  = useState(0)
-  const [awayScore,  setAwayScore]  = useState(0)
-  const [intent,     setIntent]     = useState('tactical')
-  const [playstyle,  setPlaystyle]  = useState('high_press')
+  const [formation,      setFormation]      = useState('4-3-3')
+  const [minute,         setMinute]         = useState(60)
+  const [ourScore,       setOurScore]       = useState(0)
+  const [opponentScore,  setOpponentScore]  = useState(0)
+  const [isHome,         setIsHome]         = useState(true)
+  const [opponentName,   setOpponentName]   = useState('Opponent')
+  const [intent,         setIntent]         = useState('tactical')
+  const [playstyle,      setPlaystyle]      = useState('high_press')
+  const [injuredPlayers, setInjuredPlayers] = useState([])
 
   // Playstyle data + compatibility
   const [playstyles,    setPlaystyles]    = useState({})
@@ -54,18 +57,21 @@ export default function Match() {
   const [conflictData,  setConflictData]  = useState(null)
 
   // Recommendation state
-  const [recs,        setRecs]        = useState([])
-  const [recLoading,  setRecLoading]  = useState(false)
-  const [showPanel,   setShowPanel]   = useState(false)
-  const [highlightOff, setHighOff]    = useState(null)
-  const [highlightOn,  setHighOn]     = useState(null)
-  const [subArrow,    setSubArrow]    = useState(null)
+  const [recs,           setRecs]           = useState([])
+  const [recLoading,     setRecLoading]     = useState(false)
+  const [showPanel,      setShowPanel]      = useState(false)
+  const [highlightOff,   setHighOff]        = useState(null)
+  const [highlightOn,    setHighOn]         = useState(null)
+  const [subArrow,       setSubArrow]       = useState(null)
+  const [toast,          setToast]          = useState(null)
+  const [shouldReanalyse, setShouldReanalyse] = useState(false)
 
   // Drag state
   const [activeDrag,  setActiveDrag]  = useState(null)
   const [swapFlashIdx, setFlashIdx]   = useState(null)
   const [manualSwaps, setManualSwaps] = useState(new Set())
-  const flashTimer = useRef(null)
+  const flashTimer    = useRef(null)
+  const handleAnalyseRef = useRef(null)
 
   // Stale-data disclaimer (Rule 7)
   const [showDisclaimer, setShowDisclaimer] = useState(
@@ -109,6 +115,17 @@ export default function Match() {
       })
       .catch(() => {})
   }, [playstyle, formation])
+
+  // ── Keep handleAnalyse ref fresh for auto-reanalyse ──────────────────
+  useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
+
+  // ── Auto-reanalyse after apply sub (fires once pitch/bench state settles) ─
+  useEffect(() => {
+    if (shouldReanalyse && !recLoading) {
+      setShouldReanalyse(false)
+      handleAnalyseRef.current?.()
+    }
+  }, [shouldReanalyse, recLoading])
 
   // ── Enrich with live stamina ──────────────────────────────────────────
   const enrichedPitch = useMemo(() =>
@@ -217,13 +234,11 @@ export default function Match() {
 
   // ── Apply recommendation ──────────────────────────────────────────────
   function applyRec(rec) {
-    // Support both new (sub_off/sub_on) and legacy (subOff/subOn) format
     const offName = rec.sub_off?.name ?? rec.subOff?.name
     const onName  = rec.sub_on?.name  ?? rec.subOn?.name
     const offId   = rec._subOffId ?? rec.sub_off?.id ?? rec.subOff?.id
     const onId    = rec._subOnId  ?? rec.sub_on?.id  ?? rec.subOn?.id
 
-    // Prefer id lookup, fall back to name
     const pitchIdx = offId != null
       ? pitchPlayers.findIndex(p => p.id === offId)
       : pitchPlayers.findIndex(p => p.name === offName)
@@ -233,9 +248,39 @@ export default function Match() {
 
     if (pitchIdx === -1 || benchIdx === -1) return
     doBenchToPitch(benchIdx, pitchIdx)
+
+    // Toast notification
+    showToast(`${onName ?? 'Player'} replaces ${offName ?? 'Player'}`)
+
     setHighOff(null)
     setHighOn(null)
     setSubArrow(null)
+
+    // Remove this rec card, keep panel open, auto-reanalyse with new XI
+    setRecs(prev => prev.filter(r => r !== rec))
+    setShouldReanalyse(true)
+  }
+
+  // ── Reserve → matchday bench ──────────────────────────────────────────
+  function addReserveToBench(reserve) {
+    if (!reserve) return
+    // Bump the lowest-rated bench player back to reserves
+    const lowestIdx = benchPlayers.reduce(
+      (minI, p, i, arr) => (p?.overall ?? 0) < (arr[minI]?.overall ?? 0) ? i : minI,
+      0
+    )
+    const nb = [...benchPlayers]
+    const nr = [...reservePlayers]
+    const bumped = nb[lowestIdx]
+    nb[lowestIdx] = { ...reserve }
+    const reserveIdx = nr.findIndex(r => r.id === reserve.id)
+    if (reserveIdx !== -1) {
+      nr.splice(reserveIdx, 1)
+      if (bumped) nr.push(bumped)
+    }
+    setBenchPlayers(nb)
+    setReservePlayers(nr)
+    showToast(`${reserve.name} added to matchday bench`)
   }
 
   const enrichedReserves = useMemo(() =>
@@ -253,15 +298,23 @@ export default function Match() {
     setFlashIdx(null); setRecs([])
   }
 
+  // ── Toast helper ──────────────────────────────────────────────────────
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
   // ── Analyse subs ──────────────────────────────────────────────────────
   const handleAnalyse = useCallback(async () => {
     setRecLoading(true)
-    setShowPanel(false)
     setHighOff(null); setHighOn(null); setSubArrow(null)
 
     const xiPayload = enrichedPitch.map(p => ({
       ...p, minutes_played: p.minutes_played || minute,
     }))
+
+    const homeScoreVal = isHome ? ourScore : opponentScore
+    const awayScoreVal = isHome ? opponentScore : ourScore
 
     let results = []
     let fullResponse = null
@@ -270,25 +323,24 @@ export default function Match() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          starting_xi:    xiPayload,
-          bench:          enrichedBench,
-          home_score:     homeScore,
-          away_score:     awayScore,
-          is_home:        true,
+          starting_xi:     xiPayload,
+          bench:           enrichedBench,
+          home_score:      homeScoreVal,
+          away_score:      awayScoreVal,
+          is_home:         isHome,
           minute,
-          manager_intent: intent,
+          manager_intent:  intent,
           playstyle,
           formation,
-          injured_players: [],
+          injured_players: injuredPlayers,
         }),
       })
       const data = await res.json()
-      // New format returns { recommendations: [...], conflict_warning: ... }
       if (data.recommendations) {
         results      = data.recommendations
         fullResponse = data
       } else if (Array.isArray(data)) {
-        results = data  // legacy list format
+        results = data
       }
     } catch {
       results = computeClientRecs(enrichedPitch, enrichedBench, intent, manualSwaps)
@@ -298,13 +350,12 @@ export default function Match() {
     setConflictData(fullResponse?.conflict_warning ?? null)
 
     if (results.length) {
-      const top = results[0]
+      const top     = results[0]
       const offName = top.sub_off?.name ?? top.subOff?.name
       const onName  = top.sub_on?.name  ?? top.subOn?.name
       const offId   = top._subOffId ?? top.sub_off?.id ?? top.subOff?.id
       const onId    = top._subOnId  ?? top.sub_on?.id  ?? top.subOn?.id
 
-      // Resolve IDs by name if not directly available
       const offPlayer = offId != null
         ? pitchPlayers.find(p => p.id === offId)
         : pitchPlayers.find(p => p.name === offName)
@@ -315,7 +366,6 @@ export default function Match() {
       setHighOff(offPlayer?.id ?? null)
       setHighOn(onPlayer?.id ?? null)
 
-      // Sub arrow
       const pitchIdx = pitchPlayers.findIndex(p => p.id === offPlayer?.id)
       if (pitchIdx !== -1 && formationSlots[pitchIdx]) {
         const slot = formationSlots[pitchIdx]
@@ -325,7 +375,7 @@ export default function Match() {
 
     setRecLoading(false)
     setShowPanel(true)
-  }, [enrichedPitch, enrichedBench, minute, homeScore, awayScore, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
+  }, [enrichedPitch, enrichedBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
 
   // ── No team selected ──────────────────────────────────────────────────
   if (!selectedTeam) {
@@ -366,13 +416,38 @@ export default function Match() {
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
 
-          {/* Scoreline */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'Rajdhani', fontWeight: 600 }}>HOME</span>
-            <ScoreInput value={homeScore} onChange={setHomeScore} />
-            <span style={{ color: 'var(--muted)', fontWeight: 700 }}>–</span>
-            <ScoreInput value={awayScore} onChange={setAwayScore} />
-            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'Rajdhani', fontWeight: 600 }}>AWAY</span>
+          {/* Scoreline — OUR TEAM vs OPPONENT */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Our side */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <ScoreInput value={ourScore} onChange={setOurScore} />
+              <button
+                onClick={() => setIsHome(h => !h)}
+                title="Toggle home/away"
+                style={{
+                  background: isHome ? 'rgba(0,255,135,0.15)' : 'rgba(255,184,0,0.12)',
+                  border: isHome ? '1px solid rgba(0,255,135,0.45)' : '1px solid rgba(255,184,0,0.45)',
+                  borderRadius: 3, color: isHome ? 'var(--green)' : 'var(--amber)',
+                  fontSize: 8, fontFamily: 'Rajdhani', fontWeight: 700,
+                  padding: '1px 5px', cursor: 'pointer', letterSpacing: '0.08em',
+                }}
+              >{isHome ? 'HOME' : 'AWAY'}</button>
+            </div>
+            <span style={{ color: 'var(--muted)', fontWeight: 700, marginBottom: 14 }}>–</span>
+            {/* Opponent side */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <ScoreInput value={opponentScore} onChange={setOpponentScore} />
+              <input
+                value={opponentName}
+                onChange={e => setOpponentName(e.target.value)}
+                style={{
+                  background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.12)',
+                  color: 'var(--muted)', fontSize: 8, fontFamily: 'Rajdhani', fontWeight: 600,
+                  width: 58, textAlign: 'center', outline: 'none', letterSpacing: '0.06em',
+                  padding: '1px 2px',
+                }}
+              />
+            </div>
           </div>
 
           {/* Minute */}
@@ -531,13 +606,14 @@ export default function Match() {
                 highlightId={highlightOn}
                 onSelect={p => setHighOn(prev => prev === p.id ? null : p.id)}
               />
-              {/* Squad / reserves (ranks 19+) — display only */}
+              {/* Squad / reserves (ranks 19+) — hover "+" to promote to bench */}
               {enrichedReserves.length > 0 && (
                 <BenchRow
                   bench={enrichedReserves}
                   label="SQUAD"
                   labelColour="#6b7a8d"
                   opacity={0.6}
+                  onAdd={addReserveToBench}
                 />
               )}
             </div>
@@ -549,7 +625,7 @@ export default function Match() {
                   recs={recs}
                   conflictWarning={conflictData}
                   onClose={() => { setShowPanel(false); setHighOff(null); setHighOn(null); setSubArrow(null) }}
-                  onApply={rec => { applyRec(rec); setShowPanel(false) }}
+                  onApply={applyRec}
                   onHoverRec={rec => {
                     if (!rec) {
                       // Restore to top rec highlights
@@ -577,6 +653,21 @@ export default function Match() {
           </div>
         )}
       </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,255,135,0.14)', border: '1px solid rgba(0,255,135,0.45)',
+          borderRadius: 8, padding: '8px 22px', zIndex: 9999,
+          fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 13,
+          color: 'var(--green)', letterSpacing: '0.07em',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+          pointerEvents: 'none',
+        }}>
+          ✓ {toast}
+        </div>
+      )}
 
       {/* DragOverlay — floating card while dragging */}
       <DragOverlay dropAnimation={null}>

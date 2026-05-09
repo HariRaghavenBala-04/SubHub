@@ -1,6 +1,7 @@
 /**
  * Droppable bench row — each slot is a drop target, each card is draggable.
  */
+import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { DraggableCard } from './Pitch'
 import PlayerCard from './PlayerCard'
@@ -13,6 +14,7 @@ import PlayerCard from './PlayerCard'
  *  opacity        : wrapper opacity (default 1 — use 0.6 for reserves)
  *  highlightId    : player id to pulse green
  *  onSelect       : fn(player) — omit for display-only rows
+ *  onAdd          : fn(player) — when set, shows "+" button on hover (reserves row)
  */
 export default function BenchRow({
   bench = [],
@@ -21,6 +23,7 @@ export default function BenchRow({
   opacity = 1,
   highlightId,
   onSelect,
+  onAdd,
 }) {
   return (
     <div style={{ width: '100%', marginTop: 8, flexShrink: 0, opacity }}>
@@ -30,6 +33,11 @@ export default function BenchRow({
         textTransform: 'uppercase', paddingLeft: 2,
       }}>
         {label}
+        {onAdd && (
+          <span style={{ marginLeft: 6, fontSize: 8, color: 'rgba(255,255,255,0.25)', fontWeight: 400 }}>
+            hover to promote
+          </span>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 4 }}>
         {bench.map((p, i) => (
@@ -37,6 +45,7 @@ export default function BenchRow({
             key={p?.id ?? i} index={i} player={p}
             highlightId={highlightId} onSelect={onSelect}
             interactive={!!onSelect}
+            onAdd={onAdd}
           />
         ))}
       </div>
@@ -44,12 +53,15 @@ export default function BenchRow({
   )
 }
 
-function BenchSlot({ index, player, highlightId, onSelect, interactive }) {
+function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd }) {
+  const [hovered, setHovered] = useState(false)
   const { setNodeRef, isOver } = useDroppable({ id: `bench-${index}`, disabled: !interactive })
 
   return (
     <div
       ref={interactive ? setNodeRef : undefined}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative', borderRadius: 10, flexShrink: 0,
         border: isOver ? '1.5px dashed rgba(0,255,135,0.7)' : '1.5px solid transparent',
@@ -77,6 +89,24 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive }) {
           borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--muted)', fontSize: 10,
         }}>—</div>
+      )}
+
+      {/* Promote-to-bench button (reserves only) */}
+      {onAdd && player && hovered && (
+        <button
+          onClick={() => onAdd(player)}
+          title="Add to matchday bench"
+          style={{
+            position: 'absolute', top: 3, right: 3,
+            background: 'rgba(0,255,135,0.85)', border: 'none',
+            borderRadius: '50%', width: 18, height: 18,
+            cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 900, color: '#000',
+            lineHeight: 1, zIndex: 5,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          }}
+        >+</button>
       )}
     </div>
   )

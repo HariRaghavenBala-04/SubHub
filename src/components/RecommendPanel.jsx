@@ -102,7 +102,7 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
   const {
     sub_off, sub_on,
     upgrade_delta, monte_carlo,
-    compatibility, reasoning, game_context,
+    compatibility, reasoning, timing_advice, game_context,
     // legacy fields
     position_compatibility, compatibility_warning,
     attribute_comparison = [], confidence, tactical_note,
@@ -238,6 +238,19 @@ function RecCard({ rec, rank, onApply, onHoverRec }) {
       }}>
         {reasoning}
       </div>
+
+      {/* Timing advice */}
+      {timing_advice && (
+        <div style={{
+          fontSize: 9, fontFamily: 'Rajdhani', fontWeight: 600,
+          color: timing_advice.startsWith('⚡') ? 'var(--red)'
+               : timing_advice.startsWith('⚠') ? 'var(--amber)'
+               : 'rgba(255,255,255,0.35)',
+          letterSpacing: '0.04em',
+        }}>
+          {timing_advice}
+        </div>
+      )}
 
       {/* Win probability + position + game context */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
