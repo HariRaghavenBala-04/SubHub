@@ -116,17 +116,6 @@ export default function Match() {
       .catch(() => {})
   }, [playstyle, formation])
 
-  // ── Keep handleAnalyse ref fresh for auto-reanalyse ──────────────────
-  useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
-
-  // ── Auto-reanalyse after apply sub (fires once pitch/bench state settles) ─
-  useEffect(() => {
-    if (shouldReanalyse && !recLoading) {
-      setShouldReanalyse(false)
-      handleAnalyseRef.current?.()
-    }
-  }, [shouldReanalyse, recLoading])
-
   // ── Enrich with live stamina ──────────────────────────────────────────
   const enrichedPitch = useMemo(() =>
     pitchPlayers.map(p => ({
@@ -376,6 +365,17 @@ export default function Match() {
     setRecLoading(false)
     setShowPanel(true)
   }, [enrichedPitch, enrichedBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
+
+  // ── Keep handleAnalyse ref fresh (must be after the useCallback above) ──
+  useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
+
+  // ── Auto-reanalyse after apply sub ───────────────────────────────────
+  useEffect(() => {
+    if (shouldReanalyse && !recLoading) {
+      setShouldReanalyse(false)
+      handleAnalyseRef.current?.()
+    }
+  }, [shouldReanalyse, recLoading])
 
   // ── No team selected ──────────────────────────────────────────────────
   if (!selectedTeam) {
