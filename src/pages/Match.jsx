@@ -127,17 +127,28 @@ export default function Match() {
   }, [playstyle, formation])
 
   // ── Live stamina — wired to minute slider ────────────────────────────
+  function calculateStamina(player, minute) {
+    const pos = player.assigned_slot || player.api_position || 'CM'
+    const DECAY = {
+      GK:0.18, CB:0.28, LB:0.33, RB:0.33,
+      LWB:0.35, RWB:0.35, CDM:0.38, CM:0.43,
+      LM:0.48, RM:0.48, LAM:0.50, CAM:0.50,
+      RAM:0.50, LW:0.52, RW:0.52, ST:0.58, CF:0.55
+    }
+    const base = DECAY[pos] || 0.43
+    const fc26s = player.power_stamina || 65
+    const mod = 1.0 - ((fc26s - 50) / 200)
+    const wr = player.work_rate_att || 'Medium'
+    const wmod = {High:1.12, Medium:1.0, Low:0.85}[wr] || 1.0
+    return Math.max(0, Math.round((100 - base * mod * wmod * minute) * 10) / 10)
+  }
+
   const liveXI = useMemo(() =>
     pitchPlayers.map(p => ({
       ...p,
-      stamina_pct: computeStamina(
-        p.assigned_slot ?? p.position,
-        p.minutes_played ?? minute,
-        p.power_stamina ?? null,
-      ),
-    })),
-    [pitchPlayers, minute]
-  )
+      stamina_pct: calculateStamina(p, minute),
+    }))
+  , [pitchPlayers, minute])
 
   const liveBench = useMemo(() =>
     benchPlayers.map(p => ({ ...p, stamina_pct: 100 })),
