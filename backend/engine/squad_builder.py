@@ -46,13 +46,27 @@ _POS_COLS = [
     "lwb","ldm","cdm","rdm","rwb","lb","lcb","cb","rcb","rb","gk",
 ]
 
+# All FC26 attributes needed by upgrade_delta, pressing_reliability, and scoring.
+_FC26_ATTRS = [
+    "pace", "shooting", "passing", "dribbling", "defending", "physic",
+    "power_stamina", "power_strength", "power_jumping",
+    "movement_sprint_speed", "movement_acceleration",
+    "mentality_aggression", "mentality_vision", "mentality_positioning",
+    "mentality_interceptions", "mentality_composure",
+    "attacking_finishing", "attacking_crossing", "attacking_heading_accuracy",
+    "attacking_short_passing",
+    "skill_dribbling", "skill_ball_control", "skill_long_passing",
+    "defending_marking_awareness", "defending_standing_tackle", "defending_sliding_tackle",
+    "goalkeeping_reflexes", "goalkeeping_positioning", "goalkeeping_handling",
+    "goalkeeping_diving", "goalkeeping_kicking",
+]
+
 # Load columns needed for stats plus league_name for pre-filtering only.
 # club_name / club_team_id are intentionally NOT loaded.
 _LOAD_COLS = [
-    "short_name","league_name","overall",
-    "pace","shooting","passing","dribbling","defending","physic",
-    "power_stamina","movement_sprint_speed","work_rate","player_positions",
-] + _POS_COLS
+    "short_name", "league_name", "overall",
+    "work_rate", "player_positions",
+] + _FC26_ATTRS + _POS_COLS
 
 # Filter to the 7 top leagues to prevent false-positive name matches.
 # This does NOT restrict squad membership — API players outside these
@@ -447,22 +461,34 @@ def build_squad(api_squad: list[dict], team_name: str, formation: str = "4-3-3")
     for p in api_squad:
         pos = _map_pos(p.get("position") or "")
         player: dict = {
-            "id":              p.get("id"),
-            "name":            p.get("name", ""),
-            "position":        pos,
-            "shirt_number":    p.get("shirtNumber"),
-            "nationality":     p.get("nationality"),
-            "minutes_played":  60,
+            "id":               p.get("id"),
+            "name":             p.get("name", ""),
+            "position":         pos,
+            "shirt_number":     p.get("shirtNumber"),
+            "nationality":      p.get("nationality"),
+            "minutes_played":   60,
             "is_injury_return": False,
-            "fc26_matched":    False,
-            "overall":         70,
-            # attribute defaults (used when no FC26 match)
-            "pace":       70, "shooting":  70, "passing":   70,
-            "dribbling":  70, "defending": 70, "physic":    70,
-            "power_stamina": 70,
-            "work_rate_att": "Medium",
-            "work_rate_def": "Medium",
-            "pos_ratings":   {},
+            "fc26_matched":     False,
+            "overall":          70,
+            "work_rate_att":    "Medium",
+            "work_rate_def":    "Medium",
+            "pos_ratings":      {},
+            # ── FC26 attribute defaults (all set to 65; overwritten on match) ──
+            "pace": 65, "shooting": 65, "passing": 65,
+            "dribbling": 65, "defending": 65, "physic": 65,
+            "power_stamina": 65, "power_strength": 65, "power_jumping": 65,
+            "movement_sprint_speed": 65, "movement_acceleration": 65,
+            "mentality_aggression": 65, "mentality_vision": 65,
+            "mentality_positioning": 65, "mentality_interceptions": 65,
+            "mentality_composure": 65,
+            "attacking_finishing": 65, "attacking_crossing": 65,
+            "attacking_heading_accuracy": 65, "attacking_short_passing": 65,
+            "skill_dribbling": 65, "skill_ball_control": 65, "skill_long_passing": 65,
+            "defending_marking_awareness": 65, "defending_standing_tackle": 65,
+            "defending_sliding_tackle": 65,
+            "goalkeeping_reflexes": 65, "goalkeeping_positioning": 65,
+            "goalkeeping_handling": 65, "goalkeeping_diving": 65,
+            "goalkeeping_kicking": 65,
         }
 
         fc26 = _find_fc26(p.get("name", ""))
@@ -470,7 +496,10 @@ def build_squad(api_squad: list[dict], team_name: str, formation: str = "4-3-3")
             player["fc26_matched"] = True
             player["overall"]      = _parse_rating(fc26.get("overall", 70))
 
-            for attr in ("pace","shooting","passing","dribbling","defending","physic","power_stamina"):
+            # Copy ALL FC26 attributes into the player dict.
+            # Use int(v) directly — numpy float64 values (e.g. 65.0) convert
+            # cleanly; NaN raises ValueError which is caught and skipped.
+            for attr in _FC26_ATTRS:
                 v = fc26.get(attr)
                 if v is not None:
                     try:

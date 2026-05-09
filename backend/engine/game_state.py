@@ -45,62 +45,167 @@ def analyse_game_state(
         "tactical_description": need["description"],
         "preferred_positions":  need["preferred"],
         "avoid_positions":      need["avoid"],
+        "att_allowed":          need.get("att_allowed", True),
+        "urgency_threshold":    need.get("urgency_threshold", 60),
     }
 
 
 def _tactical_need(state: str, minute: int, playstyle: str, intent: str) -> dict:
-    if state == "comfortable_win" and minute > 70:
-        return {
-            "need": "kill_game",
-            "description": "Protect lead — bring fresh legs to retain possession",
-            "preferred": ["CDM", "CM", "CB"],
-            "avoid":     ["ST", "LW", "RW"],
-        }
-    if state == "narrow_win" and minute > 75:
-        return {
-            "need": "protect_lead",
-            "description": "Defend the lead — add defensive cover now",
-            "preferred": ["CB", "CDM", "LB", "RB"],
-            "avoid":     ["ST", "CAM"],
-        }
+
+    # ── WINNING COMFORTABLY (2+ goals) ────────────────────────────────────
+    if state == "comfortable_win":
+        if minute >= 80:
+            return {
+                "need": "kill_game",
+                "description": "Kill the game — pure defensive cover now",
+                "preferred": ["CB", "CDM", "LB", "RB"],
+                "avoid": ["ST", "LW", "RW", "CAM"],
+                "att_allowed": False,
+                "urgency_threshold": 75,
+            }
+        elif minute >= 70:
+            return {
+                "need": "protect_comfortable",
+                "description": "Protect lead — fresh defensive mid preferred",
+                "preferred": ["CDM", "CM", "CB"],
+                "avoid": ["ST", "LW", "RW"],
+                "att_allowed": False,
+                "urgency_threshold": 65,
+            }
+        else:
+            return {
+                "need": "maintain_advantage",
+                "description": "Maintain advantage — tactical change or rest key players",
+                "preferred": ["CM", "CDM", "LW", "RW"],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 55,
+            }
+
+    # ── WINNING NARROWLY (1 goal) ─────────────────────────────────────────
     if state == "narrow_win":
-        return {
-            "need": "maintain_control",
-            "description": "Stay disciplined — maintain shape and tempo",
-            "preferred": ["CM", "CDM"],
-            "avoid":     [],
-        }
-    if state == "drawing" and minute > 70:
-        return {
-            "need": "chase_win",
-            "description": "Push for winner — inject attacking threat",
-            "preferred": ["ST", "LW", "RW", "CAM"],
-            "avoid":     ["CB"],
-        }
+        if minute >= 85:
+            return {
+                "need": "defend_lead",
+                "description": "Defend at all costs — CB or CDM only",
+                "preferred": ["CB", "CDM", "LB", "RB"],
+                "avoid": ["ST", "CAM", "LW", "RW"],
+                "att_allowed": False,
+                "urgency_threshold": 70,
+            }
+        elif minute >= 75:
+            return {
+                "need": "protect_narrow",
+                "description": "Protect narrow lead — defensive reinforcement",
+                "preferred": ["CDM", "CB", "CM"],
+                "avoid": ["ST", "CAM"],
+                "att_allowed": False,
+                "urgency_threshold": 65,
+            }
+        elif minute >= 60:
+            return {
+                "need": "control_game",
+                "description": "Control the game — midfield stability",
+                "preferred": ["CM", "CDM"],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 55,
+            }
+        else:
+            return {
+                "need": "manage_lead",
+                "description": "Manage the lead — balanced approach",
+                "preferred": [],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 50,
+            }
+
+    # ── DRAWING ───────────────────────────────────────────────────────────
     if state == "drawing":
-        return {
-            "need": "break_deadlock",
-            "description": "Find the breakthrough — creative sub needed",
-            "preferred": ["CAM", "LW", "RW", "CM"],
-            "avoid":     [],
-        }
+        if minute >= 75:
+            return {
+                "need": "chase_winner",
+                "description": "Chase the winner — attacking sub urgently needed",
+                "preferred": ["ST", "LW", "RW", "CAM"],
+                "avoid": ["CB", "CDM"],
+                "att_allowed": True,
+                "urgency_threshold": 80,
+            }
+        elif minute >= 60:
+            return {
+                "need": "break_deadlock",
+                "description": "Break the deadlock — creative attacking sub",
+                "preferred": ["CAM", "LW", "RW", "ST"],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 65,
+            }
+        else:
+            return {
+                "need": "tactical_shift",
+                "description": "Tactical shift — improve without risk",
+                "preferred": ["CM", "CAM", "LW", "RW"],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 55,
+            }
+
+    # ── LOSING NARROWLY (1 goal down) ────────────────────────────────────
     if state == "narrow_loss":
-        return {
-            "need": "equalise",
-            "description": "Chase the game — attacking reinforcement needed",
-            "preferred": ["ST", "LW", "RW", "CAM"],
-            "avoid":     ["CB", "CDM"],
-        }
+        if minute >= 75:
+            return {
+                "need": "desperate_equaliser",
+                "description": "Must equalise — maximum attacking threat",
+                "preferred": ["ST", "LW", "RW", "CAM"],
+                "avoid": ["CB", "LB", "RB"],
+                "att_allowed": True,
+                "urgency_threshold": 90,
+            }
+        elif minute >= 60:
+            return {
+                "need": "chase_game",
+                "description": "Chase the game — attacking reinforcement",
+                "preferred": ["ST", "LW", "RW", "CAM"],
+                "avoid": ["CB"],
+                "att_allowed": True,
+                "urgency_threshold": 70,
+            }
+        else:
+            return {
+                "need": "tactical_response",
+                "description": "Tactical response — quality attacking sub",
+                "preferred": ["LW", "RW", "CAM", "ST"],
+                "avoid": [],
+                "att_allowed": True,
+                "urgency_threshold": 60,
+            }
+
+    # ── LOSING BADLY (2+ goals down) ─────────────────────────────────────
     if state == "losing_badly":
-        return {
-            "need": "change_game",
-            "description": "Change everything — complete tactical reset",
-            "preferred": ["ST", "LW", "RW", "CAM"],
-            "avoid":     ["CB"],
-        }
+        if minute >= 70:
+            return {
+                "need": "all_out_attack",
+                "description": "All out attack — nothing to lose",
+                "preferred": ["ST", "LW", "RW", "CAM"],
+                "avoid": ["CB", "CDM", "LB", "RB"],
+                "att_allowed": True,
+                "urgency_threshold": 100,
+            }
+        else:
+            return {
+                "need": "tactical_reset",
+                "description": "Tactical reset — need goals urgently",
+                "preferred": ["ST", "CAM", "LW", "RW"],
+                "avoid": ["CB"],
+                "att_allowed": True,
+                "urgency_threshold": 80,
+            }
+
     return {
         "need": "tactical_change",
         "description": "Tactical adjustment",
-        "preferred": [],
-        "avoid":     [],
+        "preferred": [], "avoid": [],
+        "att_allowed": True,
+        "urgency_threshold": 60,
     }

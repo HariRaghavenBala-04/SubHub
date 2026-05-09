@@ -38,64 +38,19 @@ def _get_group(pos: str) -> str:
     return "MID"
 
 
-def _urgency_at(minute: int) -> str:
-    if minute >= 80:   return "CRITICAL"
-    if minute >= 70:   return "HIGH"
-    if minute >= 60:   return "MEDIUM"
-    return "LOW"
-
-
-def _scenario_bench_filter(
-    game_state:     dict,
-    minute:         int,
-    manager_intent: str,
-    is_injured:     bool,
-) -> set | None:
-    """
-    Hard filter: returns the set of position GROUPS allowed for sub-ON players.
-    None = no restriction (gs_bonus handles preference softly).
-    Injured candidates bypass this — adjacent rule still applies.
-    """
-    if is_injured:
-        return None
-
-    state = game_state["state"]
-
-    # Manager intent takes priority over game state
-    if manager_intent == "protect_lead" and minute > 60:
-        return {"DEF", "MID"}
-    if manager_intent == "chase_game":
-        return {"ATT", "MID"}
-
-    # Scenario rules
-    if state == "comfortable_win" and minute > 70:
-        return {"DEF", "MID"}                      # ATT hard-excluded
-    if state == "narrow_win" and minute > 75:
-        return {"DEF", "MID"}                      # ATT excluded (stamina-critical exception checked per-candidate)
-    if state in ("narrow_loss", "losing_badly") and minute > 60:
-        return {"ATT", "MID"}                      # DEF excluded unless injury
-    if state == "drawing" and minute > 70:
-        return {"ATT", "MID", "DEF"}               # no hard exclusion; gs_bonus handles rest
-
-    return None                                    # no restriction
-
-
 def _timing_advice(candidate: dict, minute: int, game_state: dict) -> str:
-    """Per-candidate sub-timing hint shown on the recommendation card."""
-    stamina         = candidate.get("stamina_pct", 100)
-    current_urgency = game_state["urgency"]
-    future_minute   = min(minute + 15, 90)
-    future_urgency  = _urgency_at(future_minute)
+    """Per-candidate sub-timing hint — dynamic, based on urgency_threshold from game state."""
+    urgency_threshold = game_state.get("urgency_threshold", 65)
+    current_stamina   = candidate.get("stamina_pct", 100)
+    decay_per_min     = 0.4
 
-    if stamina < 40:
-        return f"⚡ Sub now — stamina critical at {stamina:.0f}%"
-    if stamina < 55 and minute < 80:
-        return f"⚠ Sub by {min(minute + 10, 90)}' — stamina will be critical"
-    if current_urgency in ("CRITICAL", "HIGH"):
-        return "⚡ Sub now — urgency is high"
-    if future_urgency in ("CRITICAL", "HIGH") and current_urgency in ("LOW", "MEDIUM"):
-        return f"⏱ Can wait — urgency rises at ~{future_minute}'"
-    return "⏱ Optimal timing: now"
+    if current_stamina > urgency_threshold:
+        mins_until_urgent = (current_stamina - urgency_threshold) / decay_per_min
+        urgent_at_minute  = minute + int(mins_until_urgent)
+        if urgent_at_minute <= 90:
+            return f"⏱ Can wait — urgency rises at ~{urgent_at_minute}'"
+        return "⏱ Can hold for remainder of match"
+    return "⚡ Sub now — urgency is high"
 
 
 # ── Main entry point ───────────────────────────────────────────────────────
@@ -218,10 +173,7 @@ def get_recommendations(
         cand_group = _get_group(cand_slot)
         allowed    = ADJACENT.get(cand_group, ["MID"])
 
-        # Scenario hard-filter: which groups are allowed to come ON?
-        scenario_groups = _scenario_bench_filter(
-            game_state, minute, manager_intent, candidate["is_injured"]
-        )
+        att_allowed = game_state.get("att_allowed", True)
 
         for bp in bench:
             if bp.get("name") in used_bench:
@@ -230,16 +182,16 @@ def get_recommendations(
             bp_pos   = bp.get("position", "CM")
             bp_group = _get_group(bp_pos)
 
-            # ── Scenario hard-filter (applied BEFORE positional compatibility) ──
-            if scenario_groups is not None and bp_group not in scenario_groups:
-                # Narrow-win exception: allow ATT if the starter is stamina-critical
-                if not (
-                    game_state["state"] == "narrow_win"
-                    and minute > 75
-                    and candidate["stamina_pct"] < 40
-                    and bp_group == "ATT"
-                ):
-                    continue   # hard exclude — wrong context for this scenario
+            # ── Hard gate: scenario-based position filter ─────────────────────
+            if not att_allowed and bp_group == "ATT":
+                if not candidate["is_injured"]:
+                    continue   # ATT hard-excluded for this game state
+
+            if bp_group == "DEF" and game_state.get("tactical_need") in (
+                "all_out_attack", "desperate_equaliser", "chase_game", "chase_winner"
+            ):
+                if not candidate["is_injured"]:
+                    continue   # DEF excluded when chasing the game
 
             # Filter by positional compatibility
             if bp_group not in allowed:
