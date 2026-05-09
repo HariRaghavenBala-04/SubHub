@@ -1018,3 +1018,26 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: flex-end;
   margin-bottom: 2px;
 }
+
+/* Competition groups */
+.comp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comp-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comp-group-label {
+  font-size: 8px;
+  color: rgba(255,255,255,0.2);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  min-width: 50px;
+  text-transform: uppercase;
+}
