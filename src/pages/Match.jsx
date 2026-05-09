@@ -16,7 +16,7 @@ import RecommendPanel from '../components/RecommendPanel'
 import PlayerCard from '../components/PlayerCard'
 import { useTeam } from '../context/TeamContext'
 import { FORMATIONS, FORMATION_KEYS } from '../data/formations'
-import { computeStamina, computeClientRecs, isCompatibleDrop } from '../utils/football'
+import { computeStamina, computeClientRecs, isCompatibleDrop, getGameStatusText } from '../utils/football'
 
 const INTENTS = [
   { value: 'protect_lead', label: '🛡 Protect Lead' },
@@ -74,6 +74,10 @@ export default function Match() {
   const flashTimer       = useRef(null)
   const handleAnalyseRef = useRef(null)
 
+  // Sub counter + undo
+  const [subsUsed,    setSubsUsed]    = useState(0)
+  const [subHistory,  setSubHistory]  = useState([]) // stack of { pitch, bench, subsUsed }
+
   // Bench expand / formation preview
   const [benchExpanded,     setBenchExpanded]     = useState(false)
   const [previewFormation,  setPreviewFormation]  = useState(null)
@@ -122,16 +126,20 @@ export default function Match() {
       .catch(() => {})
   }, [playstyle, formation])
 
-  // ── Enrich with live stamina ──────────────────────────────────────────
-  const enrichedPitch = useMemo(() =>
+  // ── Live stamina — wired to minute slider ────────────────────────────
+  const liveXI = useMemo(() =>
     pitchPlayers.map(p => ({
       ...p,
-      stamina_pct: computeStamina(p.position, p.minutes_played ?? minute),
+      stamina_pct: computeStamina(
+        p.assigned_slot ?? p.position,
+        p.minutes_played ?? minute,
+        p.power_stamina ?? null,
+      ),
     })),
     [pitchPlayers, minute]
   )
 
-  const enrichedBench = useMemo(() =>
+  const liveBench = useMemo(() =>
     benchPlayers.map(p => ({ ...p, stamina_pct: 100 })),
     [benchPlayers]
   )
@@ -173,16 +181,27 @@ export default function Match() {
   }
 
   // ── Swap helpers ──────────────────────────────────────────────────────
-  function doBenchToPitch(benchIdx, pitchIdx) {
+  function doBenchToPitch(benchIdx, pitchIdx, skipSubCount = false) {
+    if (!skipSubCount && subsUsed >= 5) {
+      showToast('⚠ Maximum 5 substitutions reached')
+      return false
+    }
     const np = [...pitchPlayers], nb = [...benchPlayers]
     const bPlayer = { ...nb[benchIdx] }
     const pPlayer = { ...np[pitchIdx] }
     np[pitchIdx] = bPlayer
     nb[benchIdx] = pPlayer
+
+    if (!skipSubCount) {
+      // Push undo snapshot before applying
+      setSubHistory(prev => [...prev, { pitch: pitchPlayers, bench: benchPlayers, count: subsUsed }])
+      setSubsUsed(c => c + 1)
+    }
     setPitchPlayers(np)
     setBenchPlayers(nb)
     setManualSwaps(prev => new Set([...prev, pPlayer?.id]))
     flashGreen(pitchIdx)
+    return true
   }
 
   function doPitchToPitch(fromIdx, toIdx) {
@@ -331,7 +350,8 @@ export default function Match() {
       : benchPlayers.findIndex(p => p.name === onName)
 
     if (pitchIdx === -1 || benchIdx === -1) return
-    doBenchToPitch(benchIdx, pitchIdx)
+    const applied = doBenchToPitch(benchIdx, pitchIdx)
+    if (!applied) return
 
     // Toast notification
     showToast(`${onName ?? 'Player'} replaces ${offName ?? 'Player'}`)
@@ -372,11 +392,27 @@ export default function Match() {
     [reservePlayers]
   )
 
+  // ── Undo last sub ─────────────────────────────────────────────────────
+  function undoLastSub() {
+    setSubHistory(prev => {
+      if (!prev.length) return prev
+      const snapshot = prev[prev.length - 1]
+      setPitchPlayers(snapshot.pitch)
+      setBenchPlayers(snapshot.bench)
+      setSubsUsed(snapshot.count)
+      setRecs([])
+      setHighOff(null); setHighOn(null); setSubArrow(null)
+      showToast('Sub undone')
+      return prev.slice(0, -1)
+    })
+  }
+
   // ── Reset lineup ──────────────────────────────────────────────────────
   function resetLineup() {
     setPitchPlayers(originalPitch)
     setBenchPlayers(originalBench)
     setManualSwaps(new Set())
+    setSubsUsed(0); setSubHistory([])
     setHighOff(null); setHighOn(null)
     setSubArrow(null); setShowPanel(false)
     setFlashIdx(null); setRecs([])
@@ -393,12 +429,18 @@ export default function Match() {
     setRecLoading(true)
     setHighOff(null); setHighOn(null); setSubArrow(null)
 
-    const xiPayload = enrichedPitch.map(p => ({
+    const xiPayload = liveXI.map(p => ({
       ...p, minutes_played: p.minutes_played || minute,
     }))
 
     const homeScoreVal = isHome ? ourScore : opponentScore
     const awayScoreVal = isHome ? opponentScore : ourScore
+
+    console.log('[SubHub] Analyse payload:', {
+      xi:     xiPayload.map(p => ({ name: p.name, pos: p.assigned_slot ?? p.position, stamina: p.stamina_pct })),
+      bench:  liveBench.map(p => ({ name: p.name, pos: p.position })),
+      minute, score: `${homeScoreVal}-${awayScoreVal}`, intent, formation,
+    })
 
     let results = []
     let fullResponse = null
@@ -408,7 +450,7 @@ export default function Match() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           starting_xi:     xiPayload,
-          bench:           enrichedBench,
+          bench:           liveBench,
           home_score:      homeScoreVal,
           away_score:      awayScoreVal,
           is_home:         isHome,
@@ -427,7 +469,7 @@ export default function Match() {
         results = data
       }
     } catch {
-      results = computeClientRecs(enrichedPitch, enrichedBench, intent, manualSwaps)
+      results = computeClientRecs(liveXI, liveBench, intent, manualSwaps)
     }
 
     setRecs(results)
@@ -459,7 +501,7 @@ export default function Match() {
 
     setRecLoading(false)
     setShowPanel(true)
-  }, [enrichedPitch, enrichedBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
+  }, [liveXI, liveBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
 
   // ── Keep handleAnalyse ref fresh (must be after the useCallback above) ──
   useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
@@ -611,6 +653,21 @@ export default function Match() {
             }}>↺ Reset</button>
           )}
 
+          {/* Sub counter + undo */}
+          <div className="sub-counter-wrap">
+            <span className={`sub-counter${subsUsed >= 5 ? ' maxed' : subsUsed >= 3 ? ' warning' : ''}`}>
+              <span className="sub-counter-num">{subsUsed}</span>
+              <span className="sub-counter-sep">/</span>
+              <span className="sub-counter-max">5</span>
+              <span className="sub-counter-label">SUBS</span>
+            </span>
+            {subHistory.length > 0 && (
+              <button className="undo-btn" onClick={undoLastSub} title="Undo last substitution">
+                ↩ UNDO
+              </button>
+            )}
+          </div>
+
           {/* Analyse */}
           <button
             onClick={handleAnalyse}
@@ -619,6 +676,16 @@ export default function Match() {
           >
             {recLoading ? 'Analysing…' : '⚡ Analyse Subs'}
           </button>
+        </div>
+
+        {/* Game status bar */}
+        <div className="game-status-bar">
+          <span className="game-status-text">
+            {getGameStatusText(ourScore, opponentScore, minute)}
+          </span>
+          <span className="game-status-minute">
+            {minute >= 90 ? `90+${minute - 90}'` : `${minute}'`}
+          </span>
         </div>
 
         {/* Conflict warning banner — live, below controls */}
@@ -682,7 +749,7 @@ export default function Match() {
               )}
 
               <Pitch
-                pitchPlayers={enrichedPitch}
+                pitchPlayers={liveXI}
                 formation={formationSlots}
                 highlightOffId={highlightOff}
                 swapFlashIdx={swapFlashIdx}
@@ -692,7 +759,7 @@ export default function Match() {
               />
               {/* Matchday bench — collapsible on hover */}
               <BenchRow
-                bench={enrichedBench}
+                bench={liveBench}
                 label="MATCHDAY BENCH"
                 labelColour="var(--card-gold-top)"
                 highlightId={highlightOn}

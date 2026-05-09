@@ -32,8 +32,54 @@ def _norm(s: str) -> str:
 # Nickname / shortened-name overrides that can't be matched algorithmically.
 # Key: normalised API name  →  Value: FC26 _name_lower  (or None to force no-match)
 _MANUAL_MAP: dict[str, str | None] = {
-    "vinicius junior": "vini jr.",
-    "brahim diaz":     "brahim",   # FC26 uses only the first name
+    # Brazilian / single-name FC26 entries
+    "vinicius junior":  "vini jr.",
+    "brahim diaz":      "brahim",      # FC26 uses only the first name
+    "alisson becker":   "alisson",
+    "ederson moraes":   "ederson",
+    "richarlison de andrade": "richarlison",
+    "gabriel magalhaes":"gabriel",     # Arsenal CB — FC26 "Gabriel"
+    "gabriel martinelli":"g. martinelli",
+    "gabriel jesus":    "g. jesus",
+    "rodrygo goes":     "rodrygo",
+    "endrick felipe":   "endrick",
+    "vitor roque":      "v. roque",
+    "antony matheus":   "antony",
+    # Abbreviated / compound-surname FC26 entries
+    "trent alexander-arnold": "trent a.-arnold",
+    "joe gomez":        "j. gomez",    # Prevent false match to lower-rated namesake
+    "ruben dias":       "r. dias",
+    "joao cancelo":     "j. cancelo",
+    "joao pedro":       "j. pedro",
+    "pedro neto":       "p. neto",
+    "pedro":            "pedro",
+    "bernardo silva":   "b. silva",
+    "diogo jota":       "d. jota",
+    "bruno fernandes":  "b. fernandes",
+    "rafael leao":      "r. leao",
+    "theo hernandez":   "t. hernandez",
+    "lucas hernandez":  "l. hernandez",
+    "ferran torres":    "f. torres",
+    "ansu fati":        "ansu fati",
+    "pedri gonzalez":   "pedri",
+    "gavi paez":        "gavi",
+    # Known by first name only in FC26
+    "kaoru mitoma":     "mitoma",
+    "leandro trossard": "trossard",
+    "nicolas jackson":  "n. jackson",
+    "mykhailo mudryk":  "mudryk",
+    "moises caicedo":   "caicedo",
+    "lautaro martinez": "l. martinez",
+    "joaquin correa":   "j. correa",
+    "victor osimhen":   "osimhen",
+    "khvicha kvaratskhelia": "kvaratskhelia",
+    "ademola lookman":  "lookman",
+    "teun koopmeiners": "koopmeiners",
+    # Accented names often dropped by API
+    "inigo martinez":   "i. martinez",
+    "alejandro grimaldo": "grimaldo",
+    "alejandro baena":  "a. baena",
+    "yerlan aiymbetov": None,          # no FC26 entry — prevent false match
 }
 
 # ── Load FC26 once at module level ─────────────────────────────────────────

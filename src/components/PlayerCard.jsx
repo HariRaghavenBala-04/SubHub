@@ -2,7 +2,7 @@
  * PlayerCard — FIFA Rare Gold card design.
  * size: 'normal' → pitch card (72×90), 'small' → bench card (60×76), 'reserve' → reserve card (52×66)
  */
-import { staminaColour, getPlayerArchetype } from '../utils/football'
+import { staminaColour, getPlayerArchetype, getSurname, isLongSurname } from '../utils/football'
 
 const RADIUS = 14
 const CIRC   = 2 * Math.PI * RADIUS
@@ -44,7 +44,15 @@ export default function PlayerCard({
   const displaySlot = assigned_slot ?? best_slot ?? position ?? '?'
   const dotColour   = assigned_slot ? fitDotColour(position_fit) : null
   const colour      = staminaColour(stamina_pct)
-  const dashOffset  = CIRC - (CIRC * Math.min(impact_score, 100)) / 100
+
+  // Pitch ring: fill = stamina, center = overall rating
+  // Bench ring: fill = impact_score, center = impact_score, color = gold
+  const isPitch      = size === 'normal'
+  const isBench      = size === 'small'
+  const ringFill     = isPitch ? stamina_pct : Math.min(impact_score, 100)
+  const ringColor    = isPitch ? colour : 'var(--card-rating)'
+  const ringCenter   = isPitch ? (overall ?? Math.round(impact_score)) : Math.round(impact_score)
+  const dashOffset   = CIRC - (CIRC * ringFill) / 100
 
   // Card type → CSS class
   const baseClass =
@@ -63,10 +71,10 @@ export default function PlayerCard({
     highlight === 'red'   ? 'pulse-red'   :
     highlight === 'green' ? 'pulse-green' : ''
 
-  // Display last name only (compact)
-  const displayName = name?.split(' ').pop() ?? name ?? '?'
-  const isLongName  = displayName.length > 10
-  const nameClass   = `card-name${isLongName ? ' long-name' : ''}`
+  // Display surname only (compact)
+  const displayName = getSurname(name)
+  const isLong      = isLongSurname(name)
+  const nameClass   = `card-name${isLong ? ' long-name' : ''}`
 
   // Stamina fill class
   const staminaFillClass =
@@ -126,28 +134,34 @@ export default function PlayerCard({
           <span className="card-overall">{overall}</span>
         )}
 
-        {/* Impact ring (SVG) */}
+        {/* Ring (SVG) — pitch: stamina ring + overall center; bench: impact ring gold */}
         <svg
           width={ringSize} height={ringSize}
           viewBox="0 0 32 32"
           style={{ marginTop: ringMt, flexShrink: 0, position: 'relative', zIndex: 2 }}
+          title={isPitch ? `Stamina: ${Math.round(stamina_pct)}%` : `Impact: ${Math.round(impact_score)}`}
         >
           <circle cx="16" cy="16" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="2.5" />
           <circle
             cx="16" cy="16" r={RADIUS} fill="none"
-            stroke={colour} strokeWidth="2.5"
+            stroke={ringColor} strokeWidth="2.5"
             strokeDasharray={CIRC} strokeDashoffset={dashOffset}
             strokeLinecap="round" transform="rotate(-90 16 16)"
             style={{ transition: 'stroke-dashoffset 0.5s ease' }}
           />
           <text
             x="16" y="16" textAnchor="middle" dominantBaseline="central"
-            fill="var(--card-text)"
+            fill={isBench ? 'var(--card-rating)' : 'var(--card-text)'}
             style={{ fontSize: size === 'normal' ? 9 : 8, fontFamily: 'Rajdhani', fontWeight: 700 }}
           >
-            {Math.round(impact_score)}
+            {ringCenter}
           </text>
         </svg>
+
+        {/* IMPACT label for bench cards */}
+        {isBench && (
+          <div className="bench-impact-label">IMPACT</div>
+        )}
 
         {/* Tactical profile icon (pitch cards only) */}
         {tactical_profile && size === 'normal' && (

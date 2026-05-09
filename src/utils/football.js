@@ -99,6 +99,40 @@ export const FORMATION_SUGGESTIONS = {
   AM:  'No AM — use CM in advanced role.',
 }
 
+// ── Sprint 8 utility functions ────────────────────────────────────────────
+
+export function getSurname(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(' ')
+  return parts[parts.length - 1].toUpperCase()
+}
+
+export function isLongSurname(name) {
+  return getSurname(name).length > 8
+}
+
+export function getStaminaStatus(pct) {
+  return staminaStatus(pct)
+}
+
+export function getBenchImpactScore(player) {
+  if (!player) return 50
+  const ovr      = player.overall       ?? 65
+  const pace     = player.pace          ?? 65
+  const shooting = player.shooting      ?? 65
+  const physic   = player.physic        ?? 65
+  const stamina  = player.power_stamina ?? 65
+  return Math.round(ovr * 0.5 + pace * 0.15 + shooting * 0.15 + physic * 0.1 + stamina * 0.1)
+}
+
+export function getGameStatusText(ourScore, opponentScore, minute) {
+  const diff = ourScore - opponentScore
+  const half = minute <= 45 ? '1ST HALF' : minute <= 90 ? '2ND HALF' : 'EXTRA TIME'
+  if (diff > 0) return `LEADING ${ourScore}–${opponentScore} · ${half}`
+  if (diff < 0) return `TRAILING ${ourScore}–${opponentScore} · ${half}`
+  return `DRAWING ${ourScore}–${opponentScore} · ${half}`
+}
+
 export function computeStamina(position, minutesPlayed, fc26Stamina = null) {
   const rate = DECAY_RATES[(position || 'CM').toUpperCase()] ?? 0.43
   const sm = fc26Stamina !== null ? 1.0 - (fc26Stamina - 50) / 200.0 : 1.0
