@@ -1041,3 +1041,252 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 50px;
   text-transform: uppercase;
 }
+
+/* ── SQUAD READINESS ──────────────────────────────────────────────────────── */
+.readiness-loading {
+  padding: 40px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+}
+
+.readiness-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.readiness-title h2 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #f0c060;
+  letter-spacing: 2px;
+  margin: 0 0 4px 0;
+}
+
+.readiness-title p {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+  margin: 0;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.readiness-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary-pill {
+  font-size: 11px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.summary-pill.available {
+  background: rgba(0,255,135,0.1);
+  border: 1px solid rgba(0,255,135,0.3);
+  color: #00ff87;
+}
+
+.summary-pill.injured {
+  background: rgba(255,61,61,0.1);
+  border: 1px solid rgba(255,61,61,0.3);
+  color: #ff3d3d;
+}
+
+.summary-pill.doubtful {
+  background: rgba(255,184,0,0.1);
+  border: 1px solid rgba(255,184,0,0.3);
+  color: #ffb800;
+}
+
+.redline-warning {
+  background: rgba(255,61,61,0.08);
+  border: 1px solid rgba(255,61,61,0.25);
+  border-radius: 6px;
+  padding: 8px 14px;
+  color: #ff3d3d;
+  font-size: 11px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.readiness-group {
+  margin-bottom: 20px;
+}
+
+.readiness-group-label {
+  font-size: 9px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(255,255,255,0.2);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 8px;
+}
+
+.readiness-players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.readiness-player-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.readiness-player-row:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(200,150,60,0.15);
+}
+
+.readiness-player-row.excluded {
+  opacity: 0.4;
+  background: rgba(255,61,61,0.05);
+  border-color: rgba(255,61,61,0.15);
+  text-decoration: line-through;
+}
+
+.readiness-player-row.redline {
+  border-color: rgba(255,184,0,0.2);
+  background: rgba(255,184,0,0.03);
+}
+
+.rp-position {
+  font-size: 9px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+  color: #0d0d0d;
+  background: linear-gradient(135deg, #f0c060, #c8963c);
+  padding: 2px 5px;
+  border-radius: 3px;
+  min-width: 36px;
+  text-align: center;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.rp-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rp-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f5e6c8;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-overall {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(200,150,60,0.6);
+  flex-shrink: 0;
+}
+
+.rp-stamina {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rp-stamina-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.rp-stamina-label {
+  font-size: 8px;
+  color: rgba(255,255,255,0.25);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.rp-stamina-value {
+  font-size: 12px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.rp-redline-flag {
+  font-size: 9px;
+  color: #ffb800;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rp-status {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.status-btn:hover {
+  transform: scale(1.2);
+  border-color: rgba(255,255,255,0.3);
+}
+
+.status-btn.active {
+  border-color: rgba(200,150,60,0.6);
+  background: rgba(200,150,60,0.1);
+  transform: scale(1.15);
+}
+
+.readiness-footer {
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: rgba(255,61,61,0.06);
+  border: 1px solid rgba(255,61,61,0.15);
+  border-radius: 6px;
+  font-size: 11px;
+  color: rgba(255,61,61,0.7);
+  font-family: 'Rajdhani', sans-serif;
+  line-height: 1.5;
+}
