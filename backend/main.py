@@ -1,21 +1,22 @@
 """
-SubHub FastAPI Backend
+SubHub FastAPI Backend — FC26-powered engine
 """
 import os
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from .engine.recommender import recommend_subs
-from .engine.scenario_planner import plan_scenarios
-from .engine.stamina_decay import compute_squad_stamina
-from .engine.expected_impact import fetch_team_impact
+from .engine.recommender      import get_recommendations
+from .engine.scenario_planner import plan_scenarios, injury_response
+from .engine.fc26_loader      import get_player_attributes, get_position_profile, get_player_versatility
+from .engine.squad_builder    import build_squad
+from .engine.formation_slots  import reassign_for_formation, FORMATION_SLOTS
 
 load_dotenv()
 
-app = FastAPI(title="SubHub API", version="1.0.0")
+app = FastAPI(title="SubHub API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,32 +26,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FD_BASE = "https://api.football-data.org/v4"
+FD_BASE    = "https://api.football-data.org/v4"
 FD_HEADERS = {"X-Auth-Token": os.getenv("FOOTBALL_DATA_KEY", "")}
 
-BSD_BASE = "https://sports.bzzoiro.com/api/v2"
-BSD_HEADERS = {"Authorization": f"Token {os.getenv('BSD_KEY', '')}"}
-
 LEAGUE_CODES = ["PL", "BL1", "PD", "SA", "FL1", "PPL", "DED"]
-LEAGUE_BSD_IDS = {
-    "PL": 49, "BL1": 78, "PD": 140,
-    "SA": 135, "FL1": 61, "PPL": 94, "DED": 88,
-}
-LEAGUE_META = {
-    "PL":  {"name": "Premier League",   "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "country": "England"},
-    "BL1": {"name": "Bundesliga",        "flag": "🇩🇪",       "country": "Germany"},
-    "PD":  {"name": "La Liga",           "flag": "🇪🇸",       "country": "Spain"},
-    "SA":  {"name": "Serie A",           "flag": "🇮🇹",       "country": "Italy"},
-    "FL1": {"name": "Ligue 1",           "flag": "🇫🇷",       "country": "France"},
-    "PPL": {"name": "Primeira Liga",     "flag": "🇵🇹",       "country": "Portugal"},
-    "DED": {"name": "Eredivisie",        "flag": "🇳🇱",       "country": "Netherlands"},
+LEAGUE_META  = {
+    "PL":  {"name": "Premier League",  "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "country": "England"},
+    "BL1": {"name": "Bundesliga",      "flag": "🇩🇪",       "country": "Germany"},
+    "PD":  {"name": "La Liga",         "flag": "🇪🇸",       "country": "Spain"},
+    "SA":  {"name": "Serie A",         "flag": "🇮🇹",       "country": "Italy"},
+    "FL1": {"name": "Ligue 1",         "flag": "🇫🇷",       "country": "France"},
+    "PPL": {"name": "Primeira Liga",   "flag": "🇵🇹",       "country": "Portugal"},
+    "DED": {"name": "Eredivisie",      "flag": "🇳🇱",       "country": "Netherlands"},
 }
 
+POS_MAP = {
+    "Goalkeeper":         "GK",
+    "Centre-Back":        "CB",
+    "Left-Back":          "LB",
+    "Right-Back":         "RB",
+    "Defensive Midfield": "DM",
+    "Central Midfield":   "CM",
+    "Left Midfield":      "LM",
+    "Right Midfield":     "RM",
+    "Attacking Midfield": "CAM",
+    "Left Winger":        "LW",
+    "Right Winger":       "RW",
+    "Centre-Forward":     "ST",
+    "Second Striker":     "SS",
+    "Midfielder":         "CM",
+    "Defender":           "CB",
+    "Forward":            "ST",
+    "Attacker":           "ST",
+}
 
-# ── Pydantic models ──────────────────────────────────────────────────────────
+POS_ORDER = [
+    "GK","LCB","CB","RCB","LB","LWB","RB","RWB",
+    "DM","CDM","LCM","CM","RCM","LM","RM",
+    "LAM","CAM","RAM","AM",
+    "LW","RW","W","ST","SS","CF",
+]
+
+
+# ── Pydantic models ────────────────────────────────────────────────────────
 
 class PlayerIn(BaseModel):
-    id: int | str
+    id: int | str | None = None
     name: str
     position: str
     minutes_played: int = 0
@@ -64,30 +85,55 @@ class RecommendRequest(BaseModel):
     home_score: int = 0
     away_score: int = 0
     minute: int = 60
-    manager_intent: str = "tactical"
+    manager_intent: str = "tactical_change"
     days_since_last_match: int | None = None
+    injured_players: list[str] = []
+
+
+class InjuryRequest(BaseModel):
+    injured_player: PlayerIn
+    current_xi: list[PlayerIn]
+    bench: list[PlayerIn]
+    minute: int = 60
+    formation: str = "4-3-3"
 
 
 class ScenarioRequest(BaseModel):
-    starting_xi: list[PlayerIn]
+    current_xi: list[PlayerIn]
     bench: list[PlayerIn]
     minute: int = 60
     days_since_last_match: int | None = None
 
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+def _merge_fc26(player: dict) -> dict:
+    """Merge FC26 attributes into a player dict."""
+    attrs = get_player_attributes(player.get("name", ""))
+    if attrs:
+        player["overall"]          = attrs.get("overall")
+        player["tactical_profile"] = attrs.get("tactical_profile")
+        player["power_stamina"]    = attrs.get("power_stamina")
+        player["fc26_found"]       = True
+    else:
+        player["overall"]          = None
+        player["tactical_profile"] = None
+        player["power_stamina"]    = None
+        player["fc26_found"]       = False
+    return player
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/competitions")
 async def get_competitions():
-    """Return the 7 supported leagues with metadata."""
-    return [{"code": code, **LEAGUE_META[code]} for code in LEAGUE_CODES]
+    return [{"code": c, **LEAGUE_META[c]} for c in LEAGUE_CODES]
 
 
 @app.get("/api/teams/{league_code}")
 async def get_teams(league_code: str):
-    """Fetch teams for a competition from football-data.org."""
     if league_code not in LEAGUE_CODES:
-        raise HTTPException(status_code=404, detail="Unknown league code")
+        raise HTTPException(404, "Unknown league code")
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
             f"{FD_BASE}/competitions/{league_code}/teams",
@@ -95,24 +141,24 @@ async def get_teams(league_code: str):
             params={"season": 2025},
         )
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail="football-data.org error")
-    data = resp.json()
-    teams = data.get("teams", [])
+        raise HTTPException(resp.status_code, "football-data.org error")
     return [
-        {
-            "id": t["id"],
-            "name": t["name"],
-            "shortName": t.get("shortName", t["name"]),
-            "tla": t.get("tla", ""),
-            "crestUrl": t.get("crest", ""),
-        }
-        for t in teams
+        {"id": t["id"], "name": t["name"],
+         "shortName": t.get("shortName", t["name"]),
+         "tla": t.get("tla", ""),
+         "crestUrl": t.get("crest", "")}
+        for t in resp.json().get("teams", [])
     ]
 
 
 @app.get("/api/squad/{team_id}")
-async def get_squad(team_id: int, league_code: str = "PL", days_since_last_match: int | None = None):
-    """Fetch squad for a team and enrich with stamina calculations."""
+async def get_squad(
+    team_id: int,
+    league_code: str = "PL",
+    formation: str = "4-3-3",
+):
+    # Step 1: fetch squad from football-data.org — this is the ONLY source
+    #         of truth for who is in the squad.
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
             f"{FD_BASE}/teams/{team_id}",
@@ -120,125 +166,147 @@ async def get_squad(team_id: int, league_code: str = "PL", days_since_last_match
             params={"season": 2025},
         )
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail="football-data.org error")
+        raise HTTPException(resp.status_code, "football-data.org error")
 
-    data = resp.json()
-    squad_raw = data.get("squad", [])
+    data      = resp.json()
+    team_name = data.get("name", "")
+    api_squad = data.get("squad", [])
 
-    # Map football-data positions to our engine positions
-    pos_map = {
-        "Goalkeeper": "GK",
-        "Centre-Back": "CB",
-        "Left-Back": "LB",
-        "Right-Back": "RB",
-        "Defensive Midfield": "DM",
-        "Central Midfield": "CM",
-        "Left Midfield": "W",
-        "Right Midfield": "W",
-        "Attacking Midfield": "AM",
-        "Left Winger": "LW",
-        "Right Winger": "RW",
-        "Centre-Forward": "ST",
-        "Second Striker": "SS",
-        "Midfielder": "CM",
-        "Defender": "CB",
-        "Forward": "ST",
-        "Attacker": "ST",
-    }
+    if not api_squad:
+        raise HTTPException(404, f"No squad found for team {team_id}")
 
-    players = []
-    for p in squad_raw:
-        raw_pos = p.get("position") or "Midfielder"
-        position = pos_map.get(raw_pos, "CM")
-        players.append({
-            "id": p["id"],
-            "name": p["name"],
-            "position": position,
-            "minutes_played": 60,  # default; overridden by live match data
-            "is_injury_return": False,
-        })
+    # ── DIAGNOSTIC LOG 1: raw API squad ──────────────────────────────────
+    print(f"=== RAW API SQUAD for team {team_id} ===")
+    for p in api_squad:
+        print(f"  {p['name']}")
+    print(f"=== TOTAL FROM API: {len(api_squad)} ===")
 
-    enriched = compute_squad_stamina(players, days_since_last_match)
+    result = build_squad(api_squad, team_name, formation)
 
-    # Try to get impact scores from BSD
-    bsd_id = None  # Would need team BSD ID mapping; skip for now
-    impact_scores: dict = {}
+    print(
+        f"[Squad] {team_name}: XI={len(result['starting_xi'])} "
+        f"bench={len(result['bench'])} reserves={len(result['reserves'])} "
+        f"unmatched={result['unmatched']}/{result['total']}"
+    )
 
-    result = []
-    for p in enriched:
-        result.append({
-            **p,
-            "impact_score": impact_scores.get(p["id"], round(40 + (p["id"] % 60), 1)),
-        })
+    # Combine all for the legacy 'squad' field
+    all_players = result["starting_xi"] + result["bench"] + result["reserves"]
+
+    # ── DIAGNOSTIC LOG 2: final squad sent to frontend ───────────────────
+    print(f"=== FINAL SQUAD SENT TO FRONTEND ===")
+    for p in all_players:
+        print(f"  {p['name']} | fc26_matched: {p['fc26_matched']}")
 
     return {
         "team": {
-            "id": data["id"],
-            "name": data["name"],
+            "id":      data["id"],
+            "name":    team_name,
             "crestUrl": data.get("crest", ""),
         },
-        "squad": result,
+        "squad":       all_players,   # legacy flat list
+        "starting_xi": result["starting_xi"],
+        "bench":        result["bench"],
+        "reserves":     result["reserves"],
+        "meta": {
+            "unmatched_count": result["unmatched"],
+            "total_squad":     result["total"],
+        },
     }
 
 
-@app.get("/api/fixtures/{league_code}")
-async def get_fixtures(league_code: str):
-    """Fetch upcoming fixtures from football-data.org."""
-    if league_code not in LEAGUE_CODES:
-        raise HTTPException(status_code=404, detail="Unknown league code")
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{FD_BASE}/competitions/{league_code}/matches",
-            headers=FD_HEADERS,
-            params={"status": "SCHEDULED", "limit": 10},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail="football-data.org error")
-    return resp.json().get("matches", [])
+@app.get("/api/squad-comparison")
+async def squad_comparison(team_id: int):
+    resp_data = await get_squad(team_id)
+    return resp_data
+
+
+# ── Formation assignment routes ────────────────────────────────────────────
+
+class AssignFormationRequest(BaseModel):
+    players:   list[dict]
+    formation: str = "4-3-3"
+
+
+@app.post("/api/assign-formation")
+async def assign_formation(req: AssignFormationRequest):
+    """Re-assign current XI players to optimal slots for a different formation."""
+    if req.formation not in FORMATION_SLOTS:
+        raise HTTPException(400, f"Unknown formation: {req.formation}. "
+                                 f"Valid: {list(FORMATION_SLOTS.keys())}")
+    assigned = reassign_for_formation(req.players, req.formation)
+    return {"formation": req.formation, "players": assigned}
+
+
+@app.get("/api/player-versatility")
+async def player_versatility(name: str):
+    """Top 3 formation slots + ratings for a player."""
+    vers = get_player_versatility(name)
+    return {"name": name, "versatility": [{"slot": s, "rating": r} for s, r in vers]}
+
+
+@app.get("/api/player-profile")
+async def player_profile(name: str, position: str = "CM"):
+    profile = get_position_profile(name, position)
+    attrs   = get_player_attributes(name)
+    return {
+        "name":    name,
+        "profile": profile,
+        "attrs":   attrs,
+    }
 
 
 @app.post("/api/recommend")
-async def recommend(req: RecommendRequest):
-    """Generate top-3 substitution recommendations."""
-    xi = [p.model_dump() for p in req.starting_xi]
-    bench = [p.model_dump() for p in req.bench]
-    recs = recommend_subs(
-        starting_xi=xi,
-        bench=bench,
-        scoreline=(req.home_score, req.away_score),
-        minute=req.minute,
-        manager_intent=req.manager_intent,
-        days_since_last_match=req.days_since_last_match,
+async def recommend(request: Request):
+    body = await request.json()
+    return get_recommendations(
+        starting_xi     = body.get("starting_xi", []),
+        bench           = body.get("bench", []),
+        home_score      = body.get("home_score", 0),
+        away_score      = body.get("away_score", 0),
+        is_home         = body.get("is_home", True),
+        minute          = body.get("minute", 60),
+        manager_intent  = body.get("manager_intent", "tactical_change"),
+        playstyle       = body.get("playstyle", "high_press"),
+        formation       = body.get("formation", "4-3-3"),
+        injured_players = body.get("injured_players", []),
     )
-    # Filter to stamina < 65 only, serialise cleanly
-    EXCLUDE = {"stamina_colour"}
-    result = []
-    for r in recs:
-        if r["stamina_pct"] >= 65:
-            continue
-        stamina = r["stamina_pct"]
-        pos_valid = r["position_valid"]
-        confidence = (
-            "HIGH"   if stamina < 45 and pos_valid else
-            "MEDIUM" if stamina < 65 and pos_valid else
-            "LOW"
-        )
-        result.append({
-            "subOff":         {k: v for k, v in r["subOff"].items() if k not in EXCLUDE},
-            "subOn":          {k: v for k, v in r["subOn"].items()  if k not in EXCLUDE},
-            "stamina_pct":    stamina,
-            "impact_score":   r["impact_score"],
-            "position_valid": pos_valid,
-            "reasoning":      r["reasoning"],
-            "confidence":     confidence,
-        })
-    return result
+
+
+@app.get("/api/playstyles")
+async def get_playstyles():
+    from .engine.playstyle_profiles import PLAYSTYLES
+    return {
+        k: {
+            "label":       v["label"],
+            "icon":        v["icon"],
+            "description": v["description"],
+        }
+        for k, v in PLAYSTYLES.items()
+    }
+
+
+@app.get("/api/compatibility")
+async def check_compatibility(playstyle: str, formation: str):
+    from .engine.playstyle_profiles import get_compatibility as ps_compat
+    return ps_compat(playstyle, formation)
+
+
+@app.post("/api/injury-response")
+async def injury_resp(req: InjuryRequest):
+    injured = req.injured_player.model_dump()
+    xi      = [p.model_dump() for p in req.current_xi]
+    bench   = [p.model_dump() for p in req.bench]
+    return injury_response(
+        injured_player=injured,
+        bench=bench,
+        current_xi=xi,
+        minute=req.minute,
+    )
 
 
 @app.post("/api/scenarios")
 async def scenarios(req: ScenarioRequest):
-    """Run W/D/L scenario planning at a given minute."""
-    xi = [p.model_dump() for p in req.starting_xi]
+    xi    = [p.model_dump() for p in req.current_xi]
     bench = [p.model_dump() for p in req.bench]
     return plan_scenarios(
         starting_xi=xi,
@@ -250,4 +318,5 @@ async def scenarios(req: ScenarioRequest):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "SubHub API"}
+    from .engine.fc26_loader import _db
+    return {"status": "ok", "fc26_players_loaded": len(_db)}

@@ -26,12 +26,13 @@ export default function Match() {
   )
 
   // Squad state
-  const [pitchPlayers, setPitchPlayers]   = useState([])
-  const [benchPlayers, setBenchPlayers]   = useState([])
-  const [originalPitch, setOriginalPitch] = useState([])
-  const [originalBench, setOriginalBench] = useState([])
-  const [loading, setLoading]             = useState(false)
-  const [error, setError]                 = useState(null)
+  const [pitchPlayers,   setPitchPlayers]   = useState([])
+  const [benchPlayers,   setBenchPlayers]   = useState([])
+  const [reservePlayers, setReservePlayers] = useState([])
+  const [originalPitch,  setOriginalPitch]  = useState([])
+  const [originalBench,  setOriginalBench]  = useState([])
+  const [loading,        setLoading]        = useState(false)
+  const [error,          setError]          = useState(null)
 
   // Match controls
   const [formation,  setFormation]  = useState('4-3-3')
@@ -39,6 +40,12 @@ export default function Match() {
   const [homeScore,  setHomeScore]  = useState(0)
   const [awayScore,  setAwayScore]  = useState(0)
   const [intent,     setIntent]     = useState('tactical')
+  const [playstyle,  setPlaystyle]  = useState('high_press')
+
+  // Playstyle data + compatibility
+  const [playstyles,    setPlaystyles]    = useState({})
+  const [compatibility, setCompatibility] = useState(null)
+  const [conflictData,  setConflictData]  = useState(null)
 
   // Recommendation state
   const [recs,        setRecs]        = useState([])
@@ -54,6 +61,15 @@ export default function Match() {
   const [manualSwaps, setManualSwaps] = useState(new Set())
   const flashTimer = useRef(null)
 
+  // Stale-data disclaimer (Rule 7)
+  const [showDisclaimer, setShowDisclaimer] = useState(
+    () => sessionStorage.getItem('subhub_disclaimer_dismissed') !== '1'
+  )
+  function dismissDisclaimer() {
+    sessionStorage.setItem('subhub_disclaimer_dismissed', '1')
+    setShowDisclaimer(false)
+  }
+
   // ── Load squad ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedTeam) return
@@ -61,15 +77,32 @@ export default function Match() {
     setError(null)
     fetchSquad(selectedTeam.id, selectedTeam.leagueCode)
       .then(data => {
-        const { xi, bench } = data
+        const { xi, bench, reserves } = data
         setPitchPlayers(xi)
         setBenchPlayers(bench)
+        setReservePlayers(reserves ?? [])
         setOriginalPitch(xi)
         setOriginalBench(bench)
         setLoading(false)
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [selectedTeam?.id])
+
+  // ── Fetch playstyle catalogue once on mount ───────────────────────────
+  useEffect(() => {
+    fetch('/api/playstyles').then(r => r.json()).then(setPlaystyles).catch(() => {})
+  }, [])
+
+  // ── Live compatibility check on playstyle or formation change ─────────
+  useEffect(() => {
+    fetch(`/api/compatibility?playstyle=${playstyle}&formation=${formation}`)
+      .then(r => r.json())
+      .then(data => {
+        setCompatibility(data)
+        setConflictData(data.is_conflict ? data : null)
+      })
+      .catch(() => {})
+  }, [playstyle, formation])
 
   // ── Enrich with live stamina ──────────────────────────────────────────
   const enrichedPitch = useMemo(() =>
@@ -86,6 +119,28 @@ export default function Match() {
   )
 
   const formationSlots = FORMATIONS[formation]?.positions ?? FORMATIONS['4-3-3'].positions
+
+  // ── Formation change: re-assign slots via engine ─────────────────────
+  async function handleFormationChange(newFormation) {
+    if (newFormation === formation) return
+    setFormation(newFormation)
+    if (!pitchPlayers.length) return
+    try {
+      const res = await fetch('/api/assign-formation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ players: pitchPlayers, formation: newFormation }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data.players) && data.players.length === pitchPlayers.length) {
+          setPitchPlayers(data.players)
+        }
+      }
+    } catch {
+      // Backend unreachable — formation visual still switches, slot data stays as-is
+    }
+  }
 
   // ── Flash helper ──────────────────────────────────────────────────────
   function flashGreen(idx) {
@@ -156,18 +211,31 @@ export default function Match() {
 
   // ── Apply recommendation ──────────────────────────────────────────────
   function applyRec(rec) {
-    const pitchIdx = pitchPlayers.findIndex(p => p.id === rec.subOff?.id)
-    const benchIdx = benchPlayers.findIndex(p => p.id === rec.subOn?.id)
+    // Support both new (sub_off/sub_on) and legacy (subOff/subOn) format
+    const offName = rec.sub_off?.name ?? rec.subOff?.name
+    const onName  = rec.sub_on?.name  ?? rec.subOn?.name
+    const offId   = rec._subOffId ?? rec.sub_off?.id ?? rec.subOff?.id
+    const onId    = rec._subOnId  ?? rec.sub_on?.id  ?? rec.subOn?.id
+
+    // Prefer id lookup, fall back to name
+    const pitchIdx = offId != null
+      ? pitchPlayers.findIndex(p => p.id === offId)
+      : pitchPlayers.findIndex(p => p.name === offName)
+    const benchIdx = onId != null
+      ? benchPlayers.findIndex(p => p.id === onId)
+      : benchPlayers.findIndex(p => p.name === onName)
+
     if (pitchIdx === -1 || benchIdx === -1) return
     doBenchToPitch(benchIdx, pitchIdx)
-
-    // Update highlights
-    const newPitch = [...pitchPlayers]
-    newPitch[pitchIdx] = benchPlayers[benchIdx]
     setHighOff(null)
     setHighOn(null)
     setSubArrow(null)
   }
+
+  const enrichedReserves = useMemo(() =>
+    reservePlayers.map(p => ({ ...p, stamina_pct: 100 })),
+    [reservePlayers]
+  )
 
   // ── Reset lineup ──────────────────────────────────────────────────────
   function resetLineup() {
@@ -186,40 +254,63 @@ export default function Match() {
     setHighOff(null); setHighOn(null); setSubArrow(null)
 
     const xiPayload = enrichedPitch.map(p => ({
-      ...p, minutes_played: p.minutes_played ?? minute,
+      ...p, minutes_played: p.minutes_played || minute,
     }))
 
-    let results
+    let results = []
+    let fullResponse = null
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          starting_xi:   xiPayload,
-          bench:         enrichedBench,
-          home_score:    homeScore,
-          away_score:    awayScore,
+          starting_xi:    xiPayload,
+          bench:          enrichedBench,
+          home_score:     homeScore,
+          away_score:     awayScore,
+          is_home:        true,
           minute,
           manager_intent: intent,
+          playstyle,
+          formation,
+          injured_players: [],
         }),
       })
-      results = await res.json()
+      const data = await res.json()
+      // New format returns { recommendations: [...], conflict_warning: ... }
+      if (data.recommendations) {
+        results      = data.recommendations
+        fullResponse = data
+      } else if (Array.isArray(data)) {
+        results = data  // legacy list format
+      }
     } catch {
       results = computeClientRecs(enrichedPitch, enrichedBench, intent, manualSwaps)
     }
 
-    // Filter to stamina < 65 (API should handle this, but enforce on client too)
-    results = results.filter(r => (r.stamina_pct ?? 100) < 65)
-
     setRecs(results)
+    setConflictData(fullResponse?.conflict_warning ?? null)
 
     if (results.length) {
       const top = results[0]
-      setHighOff(top.subOff?.id)
-      setHighOn(top.subOn?.id)
+      const offName = top.sub_off?.name ?? top.subOff?.name
+      const onName  = top.sub_on?.name  ?? top.subOn?.name
+      const offId   = top._subOffId ?? top.sub_off?.id ?? top.subOff?.id
+      const onId    = top._subOnId  ?? top.sub_on?.id  ?? top.subOn?.id
 
-      // Sub arrow: from bottom of pitch to player's pitch position
-      const pitchIdx = pitchPlayers.findIndex(p => p.id === top.subOff?.id)
+      // Resolve IDs by name if not directly available
+      const offPlayer = offId != null
+        ? pitchPlayers.find(p => p.id === offId)
+        : pitchPlayers.find(p => p.name === offName)
+      const onPlayer = onId != null
+        ? benchPlayers.find(p => p.id === onId)
+        : benchPlayers.find(p => p.name === onName)
+
+      setHighOff(offPlayer?.id ?? null)
+      setHighOn(onPlayer?.id ?? null)
+
+      // Sub arrow
+      const pitchIdx = pitchPlayers.findIndex(p => p.id === offPlayer?.id)
       if (pitchIdx !== -1 && formationSlots[pitchIdx]) {
         const slot = formationSlots[pitchIdx]
         setSubArrow({ fromLeft: 50, fromTop: 98, toLeft: slot.left, toTop: slot.top })
@@ -228,7 +319,7 @@ export default function Match() {
 
     setRecLoading(false)
     setShowPanel(true)
-  }, [enrichedPitch, enrichedBench, minute, homeScore, awayScore, intent, manualSwaps, pitchPlayers, formationSlots])
+  }, [enrichedPitch, enrichedBench, minute, homeScore, awayScore, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
 
   // ── No team selected ──────────────────────────────────────────────────
   if (!selectedTeam) {
@@ -301,10 +392,26 @@ export default function Match() {
             ))}
           </div>
 
+          {/* Playstyle selector */}
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            {Object.entries(playstyles).map(([key, ps]) => (
+              <button key={key} onClick={() => setPlaystyle(key)} title={ps.description} style={{
+                background: playstyle === key ? 'rgba(0,200,255,0.15)' : 'transparent',
+                border: playstyle === key ? '1px solid rgba(0,200,255,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 5,
+                color: playstyle === key ? '#00c8ff' : 'var(--muted)',
+                fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 600,
+                padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>
+                {ps.icon} {ps.label}
+              </button>
+            ))}
+          </div>
+
           {/* Formation toggle */}
           <div style={{ display: 'flex', gap: 3 }}>
             {FORMATION_KEYS.map(f => (
-              <button key={f} onClick={() => setFormation(f)} style={{
+              <button key={f} onClick={() => handleFormationChange(f)} style={{
                 background: formation === f ? 'rgba(0,255,135,0.15)' : 'transparent',
                 border: formation === f ? '1px solid rgba(0,255,135,0.5)' : '1px solid rgba(255,255,255,0.08)',
                 borderRadius: 5, color: formation === f ? 'var(--green)' : 'var(--muted)',
@@ -313,6 +420,11 @@ export default function Match() {
               }}>{f}</button>
             ))}
           </div>
+
+          {/* Compatibility indicator */}
+          {compatibility && (
+            <CompatBadge compat={compatibility} />
+          )}
 
           {/* Reset */}
           {manualSwaps.size > 0 && (
@@ -333,9 +445,28 @@ export default function Match() {
             padding: '7px 18px', cursor: (recLoading || loading) ? 'not-allowed' : 'pointer',
             letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            {recLoading ? '…' : '⚡ Analyse Subs'}
+            {recLoading ? 'Analysing tactical options…' : '⚡ Analyse Subs'}
           </button>
         </div>
+
+        {/* Conflict warning banner — live, below controls */}
+        {compatibility?.is_conflict && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            background: 'rgba(255,50,50,0.08)', border: '1px solid rgba(255,80,80,0.3)',
+            borderRadius: 0, padding: '6px 14px', flexShrink: 0, gap: 8,
+            zIndex: 29,
+          }}>
+            <div style={{ fontSize: 10, color: '#ff6464', fontFamily: 'Rajdhani', fontWeight: 600, lineHeight: 1.5 }}>
+              ❌ {playstyles[playstyle]?.label ?? playstyle} + {formation} — {compatibility.reason}
+              {' '}
+              <span style={{ color: 'rgba(255,255,255,0.4)' }}>
+                Recommended: switch to {compatibility.recommended_formation}
+                {' '}· Win modifier: {Math.round((compatibility.win_probability_modifier - 1) * 100)}% active
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Loading / error */}
         {loading && (
@@ -357,6 +488,27 @@ export default function Match() {
               transition: 'margin-right 0.32s ease',
               marginRight: showPanel ? 304 : 0,
             }}>
+              {/* Stale data disclaimer (Rule 7) */}
+              {showDisclaimer && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.25)',
+                  borderRadius: 6, padding: '5px 10px', flexShrink: 0,
+                }}>
+                  <span style={{
+                    fontSize: 10, color: '#ffb800', fontFamily: 'Rajdhani', fontWeight: 600,
+                    letterSpacing: '0.04em',
+                  }}>
+                    ⚠ Squad data from football-data.org. Transfers after July 2025 may not be reflected.
+                  </span>
+                  <button onClick={dismissDisclaimer} style={{
+                    background: 'none', border: 'none', color: '#ffb800',
+                    cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 0 0 8px',
+                    opacity: 0.7,
+                  }}>✕</button>
+                </div>
+              )}
+
               <Pitch
                 pitchPlayers={enrichedPitch}
                 formation={formationSlots}
@@ -365,11 +517,23 @@ export default function Match() {
                 onPlayerClick={p => setHighOff(prev => prev === p.id ? null : p.id)}
                 subArrow={showPanel ? subArrow : null}
               />
+              {/* Matchday bench — sub candidates (ranks 12-18) */}
               <BenchRow
                 bench={enrichedBench}
+                label="MATCHDAY BENCH"
+                labelColour="#00ff87"
                 highlightId={highlightOn}
                 onSelect={p => setHighOn(prev => prev === p.id ? null : p.id)}
               />
+              {/* Squad / reserves (ranks 19+) — display only */}
+              {enrichedReserves.length > 0 && (
+                <BenchRow
+                  bench={enrichedReserves}
+                  label="SQUAD"
+                  labelColour="#6b7a8d"
+                  opacity={0.6}
+                />
+              )}
             </div>
 
             {/* Recommendation panel */}
@@ -377,8 +541,30 @@ export default function Match() {
               <div style={{ position: 'absolute', top: 0, right: 0, height: '100%', width: 304, zIndex: 20 }}>
                 <RecommendPanel
                   recs={recs}
+                  conflictWarning={conflictData}
                   onClose={() => { setShowPanel(false); setHighOff(null); setHighOn(null); setSubArrow(null) }}
                   onApply={rec => { applyRec(rec); setShowPanel(false) }}
+                  onHoverRec={rec => {
+                    if (!rec) {
+                      // Restore to top rec highlights
+                      if (recs.length) {
+                        const top = recs[0]
+                        const offName = top.sub_off?.name ?? top.subOff?.name
+                        const onName  = top.sub_on?.name  ?? top.subOn?.name
+                        const offP = pitchPlayers.find(p => p.name === offName || p.id === top._subOffId)
+                        const onP  = benchPlayers.find(p => p.name === onName  || p.id === top._subOnId)
+                        setHighOff(offP?.id ?? null)
+                        setHighOn(onP?.id ?? null)
+                      }
+                      return
+                    }
+                    const offName = rec.sub_off?.name ?? rec.subOff?.name
+                    const onName  = rec.sub_on?.name  ?? rec.subOn?.name
+                    const offP = pitchPlayers.find(p => p.name === offName || p.id === rec._subOffId)
+                    const onP  = benchPlayers.find(p => p.name === onName  || p.id === rec._subOnId)
+                    setHighOff(offP?.id ?? null)
+                    setHighOn(onP?.id ?? null)
+                  }}
                 />
               </div>
             )}
@@ -412,5 +598,29 @@ function ScoreInput({ value, onChange }) {
         outline: 'none',
       }}
     />
+  )
+}
+
+function CompatBadge({ compat }) {
+  const { score, verdict, reason } = compat
+  let bg, border, color, prefix
+  if (score >= 85)      { bg = 'rgba(0,255,135,0.10)'; border = 'rgba(0,255,135,0.4)';  color = 'var(--green)'; prefix = '✅' }
+  else if (score >= 70) { bg = 'rgba(0,255,135,0.07)'; border = 'rgba(0,255,135,0.3)';  color = 'var(--green)'; prefix = '✅' }
+  else if (score >= 55) { bg = 'rgba(255,184,0,0.08)'; border = 'rgba(255,184,0,0.35)'; color = 'var(--amber)'; prefix = '⚠' }
+  else if (score >= 40) { bg = 'rgba(255,184,0,0.08)'; border = 'rgba(255,184,0,0.35)'; color = 'var(--amber)'; prefix = '⚠' }
+  else                  { bg = 'rgba(255,60,60,0.08)';  border = 'rgba(255,60,60,0.4)';  color = '#ff6464';      prefix = '❌' }
+
+  return (
+    <span
+      title={reason}
+      style={{
+        fontSize: 9, fontFamily: 'Rajdhani', fontWeight: 700,
+        padding: '3px 7px', borderRadius: 4,
+        background: bg, border: `1px solid ${border}`, color,
+        letterSpacing: '0.06em', whiteSpace: 'nowrap', cursor: 'help',
+      }}
+    >
+      {prefix} {verdict} {score}/100
+    </span>
   )
 }
