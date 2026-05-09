@@ -38,6 +38,111 @@ def _get_group(pos: str) -> str:
     return "MID"
 
 
+# ── Strict position group lock (FIX 2) ────────────────────────────────────
+
+STRICT_POSITION_GROUPS: dict[str, list[str]] = {
+    "GK":  ["GK"],
+    "DEF": ["CB", "LB", "RB", "LWB", "RWB"],
+    "MID": ["CDM", "CM", "LM", "RM", "LAM", "CAM", "RAM"],
+    "ATT": ["ST", "CF", "LW", "RW", "SS"],
+}
+
+
+def _get_strict_group(pos: str) -> str:
+    for g, slots in STRICT_POSITION_GROUPS.items():
+        if pos in slots:
+            return g
+    return "MID"
+
+
+def _is_position_compatible(
+    bench_pos: str,
+    candidate_slot: str,
+    is_injured: bool,
+) -> tuple[bool, str]:
+    """
+    Hard position group lock — returns (compatible, risk_label).
+    DEF can never fill ATT slot. ATT can never fill DEF slot (unless injury).
+    GK is absolute — only GK replaces GK.
+    """
+    bench_group = _get_strict_group(bench_pos)
+    slot_group  = _get_strict_group(candidate_slot)
+
+    # GK rule — absolute
+    if candidate_slot == "GK":
+        return (True, "direct") if bench_pos == "GK" else (False, "invalid")
+    if bench_pos == "GK":
+        return False, "invalid"
+
+    # ATT slot — only ATT or MID, NEVER DEF
+    if slot_group == "ATT":
+        if bench_group == "DEF":
+            return False, "invalid"
+        if bench_group == "ATT":
+            return True, "direct"
+        if bench_group == "MID":
+            return True, "safe"
+
+    # DEF slot — only DEF or MID; ATT only on injury emergency
+    if slot_group == "DEF":
+        if bench_group == "ATT":
+            return (True, "emergency") if is_injured else (False, "invalid")
+        if bench_group == "DEF":
+            return True, "direct"
+        if bench_group == "MID":
+            return True, "safe"
+
+    # MID slot — any non-GK allowed
+    if slot_group == "MID":
+        if bench_group == "GK":
+            return False, "invalid"
+        if bench_group == "MID":
+            return True, "direct"
+        if bench_group == "DEF":
+            return True, "safe"
+        if bench_group == "ATT":
+            return True, "safe"
+
+    return False, "invalid"
+
+
+def _should_consider_subbing_off(
+    player: dict,
+    game_state: dict,
+    stamina_pct: float,
+) -> bool:
+    """
+    Game-state-aware gate: should this player be considered for subbing off?
+    Returns False for players the tactical situation says should stay on.
+    """
+    slot       = player.get("assigned_slot", "CM")
+    slot_group = _get_strict_group(slot)
+    need       = game_state["tactical_need"]
+
+    # RULE 1 — Never sub GK
+    if slot == "GK":
+        return False
+
+    # RULE 2 — Chasing: keep ATT players on unless stamina critical
+    if need in ("chase_game", "equalise", "desperate_equaliser",
+                "all_out_attack", "chase_winner", "break_deadlock"):
+        if slot_group == "ATT" and stamina_pct > 40:
+            return False
+
+    # RULE 3 — Protecting lead: keep DEF players on unless stamina critical
+    if need in ("kill_game", "protect_lead", "defend_lead",
+                "protect_narrow", "protect_comfortable"):
+        if slot_group == "DEF" and stamina_pct > 50:
+            return False
+
+    # RULE 4 — Drawing late: keep CAM on unless stamina critical
+    if need in ("chase_winner", "break_deadlock"):
+        if slot == "CAM" and stamina_pct > 45:
+            return False
+
+    return True
+
+
 def _timing_advice(candidate: dict, minute: int, game_state: dict) -> str:
     """Per-candidate sub-timing hint — dynamic, based on urgency_threshold from game state."""
     urgency_threshold = game_state.get("urgency_threshold", 65)
@@ -130,6 +235,11 @@ def get_recommendations(
         if p.get("assigned_slot") == "GK" and not p["is_injured"]:
             continue
 
+        # Game-state-aware gate: skip players that should stay on
+        if not _should_consider_subbing_off(p, game_state, p["stamina_pct"]):
+            if not p["is_injured"]:
+                continue
+
         urgency = 0
         reasons = []
 
@@ -165,14 +275,26 @@ def get_recommendations(
     recommendations = []
     used_bench: set = set()
 
+    # Sort bench by tactical need — preferred positions first
+    _need              = game_state["tactical_need"]
+    _preferred_in_need = game_state["preferred_positions"]
+    if _need in (
+        "desperate_equaliser", "all_out_attack", "chase_game", "chase_winner",
+        "break_deadlock", "kill_game", "defend_lead", "protect_narrow",
+    ):
+        bench = sorted(
+            bench,
+            key=lambda bp: (
+                0 if bp.get("position", "CM") in _preferred_in_need else 1,
+                -float(bp.get("overall", 70)),
+            ),
+        )
+
     for candidate in candidates[:3]:
         best       = None
         best_score = -9999.0
 
-        cand_slot  = candidate.get("assigned_slot") or candidate.get("position", "CM")
-        cand_group = _get_group(cand_slot)
-        allowed    = ADJACENT.get(cand_group, ["MID"])
-
+        cand_slot   = candidate.get("assigned_slot") or candidate.get("position", "CM")
         att_allowed = game_state.get("att_allowed", True)
 
         for bp in bench:
@@ -180,7 +302,7 @@ def get_recommendations(
                 continue
 
             bp_pos   = bp.get("position", "CM")
-            bp_group = _get_group(bp_pos)
+            bp_group = _get_strict_group(bp_pos)
 
             # ── Hard gate: scenario-based position filter ─────────────────────
             if not att_allowed and bp_group == "ATT":
@@ -193,15 +315,12 @@ def get_recommendations(
                 if not candidate["is_injured"]:
                     continue   # DEF excluded when chasing the game
 
-            # Filter by positional compatibility
-            if bp_group not in allowed:
-                if not candidate["is_injured"]:
-                    continue
-                compat_risk = "emergency"
-            elif bp_group == cand_group:
-                compat_risk = "direct"
-            else:
-                compat_risk = "safe"
+            # Strict position group lock
+            compatible, compat_risk = _is_position_compatible(
+                bp_pos, cand_slot, candidate["is_injured"]
+            )
+            if not compatible:
+                continue
 
             # Game state position preference bonus
             preferred = game_state["preferred_positions"]
@@ -279,6 +398,12 @@ def get_recommendations(
         if not best:
             continue
 
+        print(
+            f"[Rec #{len(recommendations)+1}] "
+            f"Bench {best['player'].get('name','')} "
+            f"({best['player'].get('position','?')}/{_get_strict_group(best['player'].get('position','CM'))}) "
+            f"→ slot {cand_slot} ({_get_strict_group(cand_slot)}): {best['compat_risk']}"
+        )
         used_bench.add(best["player"].get("name"))
 
         sub_lang  = PLAYSTYLES[playstyle]["sub_language"]
