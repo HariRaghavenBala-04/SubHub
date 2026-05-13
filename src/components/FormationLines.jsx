@@ -66,16 +66,23 @@ export default function FormationLines({ players, highlightSlots = [] }) {
     }
 
     // Vertical: each player → nearest in next group
+    const CB_SLOTS = new Set(['CB', 'LCB', 'RCB'])
     for (let gi = 0; gi < groupKeys.length - 1; gi++) {
       const fromGroup = groupMap[groupKeys[gi]]
       const toGroup   = groupMap[groupKeys[gi + 1]]
       for (const fp of fromGroup) {
-        let nearest = toGroup[0], bestDist = Infinity
-        for (const tp of toGroup) {
-          const d = Math.abs(tp.left - fp.left)
-          if (d < bestDist) { bestDist = d; nearest = tp }
+        const sorted = [...toGroup].sort((a, b) => Math.abs(a.left - fp.left) - Math.abs(b.left - fp.left))
+        let targets
+        if (gi === 0) {
+          // GK → DEF: connect only to CB positions; fall back to nearest if no CBs
+          const cbs = sorted.filter(p => CB_SLOTS.has(p.slot?.toUpperCase()))
+          targets = cbs.length > 0 ? cbs : sorted.slice(0, 1)
+        } else {
+          targets = (fromGroup.length === 1 && toGroup.length >= 2) ? sorted.slice(0, 2) : sorted.slice(0, 1)
         }
-        result.push({ from: fp, to: nearest, key: `v-${gi}-${fp.slot}-${fp.left}` })
+        targets.forEach((tp, ti) => {
+          result.push({ from: fp, to: tp, key: `v-${gi}-${fp.slot}-${fp.left}-${ti}` })
+        })
       }
     }
 

@@ -5,7 +5,10 @@
  * See LICENSE file for full terms.
  */
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTeam } from '../context/TeamContext'
+import { getSavedSquads, saveSquad, deleteSquad } from '../utils/squadStorage'
+import { UEFA_ELIGIBILITY } from '../utils/uefaEligibility'
 
 // ── Country mapping ────────────────────────────────────────────────────────
 
@@ -55,23 +58,6 @@ const TEAM_COUNTRY = {
 
 // ── UEFA eligibility ───────────────────────────────────────────────────────
 
-const UEFA_ELIGIBILITY = {
-  57: 'UCL', 58: 'UEL', 61: 'UCL', 64: 'UCL',
-  65: 'UCL', 67: 'UCL', 73: 'UCL',
-  354: 'UECL', 351: 'UEL',
-  3: 'UCL', 4: 'UCL', 5: 'UCL', 10: 'UEL',
-  17: 'UEL', 19: 'UCL', 721: 'UECL',
-  78: 'UCL', 81: 'UCL', 86: 'UCL', 90: 'UEL',
-  92: 'UECL', 94: 'UCL', 95: 'UCL', 558: 'UEL',
-  516: 'UECL', 521: 'UEL', 523: 'UEL',
-  524: 'UCL', 527: 'UCL', 548: 'UCL',
-  99: 'UECL', 100: 'UEL', 102: 'UCL', 103: 'UEL',
-  108: 'UCL', 109: 'UCL', 113: 'UCL',
-  674: 'UCL', 675: 'UCL', 678: 'UCL',
-  682: 'UECL', 718: 'UEL',
-  495: 'UCL', 498: 'UCL', 503: 'UEL',
-  5543: 'UECL', 5613: 'UEL',
-}
 
 // ── Domestic competitions ──────────────────────────────────────────────────
 
@@ -123,6 +109,50 @@ const UEFA_COMPS = {
 }
 
 const FRIENDLY = { code: 'FRN', name: 'Friendly' }
+
+// ── Competition Theme Engine ───────────────────────────────────────────────
+
+const COMPETITION_THEMES = {
+  // ENGLAND
+  PL:   { primary: '#380151', accent: '#00ff87', cardBorder: '#6d0fd0', cardBg: 'rgba(55,1,80,0.35)',    cardGlow: 'rgba(109,15,208,0.4)',  pitchTint: 'rgba(55,1,80,0.12)',    textAccent: '#00ff87', pillActive: 'rgba(109,15,208,0.35)', pillBorder: '#6d0fd0', label: 'Premier League',             vibe: 'Intensity. Pace. No rest.' },
+  FAC:  { primary: '#002147', accent: '#f5c518', cardBorder: '#f5c518', cardBg: 'rgba(0,33,71,0.35)',    cardGlow: 'rgba(245,197,24,0.4)',  pitchTint: 'rgba(0,33,71,0.12)',    textAccent: '#f5c518', pillActive: 'rgba(245,197,24,0.2)',  pillBorder: '#f5c518', label: 'FA Cup',                      vibe: 'The beautiful upset.' },
+  CC:   { primary: '#003366', accent: '#aaccff', cardBorder: '#6699cc', cardBg: 'rgba(0,51,102,0.35)',   cardGlow: 'rgba(102,153,204,0.4)', pitchTint: 'rgba(0,51,102,0.12)',   textAccent: '#aaccff', pillActive: 'rgba(102,153,204,0.2)', pillBorder: '#6699cc', label: 'Carabao Cup',                 vibe: 'League Cup drama.' },
+  FCS:  { primary: '#1a2040', accent: '#f0c060', cardBorder: '#c8963c', cardBg: 'rgba(26,32,64,0.35)',   cardGlow: 'rgba(200,150,60,0.4)',  pitchTint: 'rgba(26,32,64,0.12)',   textAccent: '#f0c060', pillActive: 'rgba(200,150,60,0.2)',  pillBorder: '#c8963c', label: 'Community Shield',            vibe: 'Season opener glory.' },
+  // GERMANY
+  BL:   { primary: '#1a0008', accent: '#ff4466', cardBorder: '#d00027', cardBg: 'rgba(208,0,39,0.18)',   cardGlow: 'rgba(208,0,39,0.45)',   pitchTint: 'rgba(208,0,39,0.08)',   textAccent: '#ff6680', pillActive: 'rgba(208,0,39,0.28)',   pillBorder: '#d00027', label: 'Bundesliga',                  vibe: 'Gegenpressing territory.' },
+  DFB:  { primary: '#1e1e1e', accent: '#cccccc', cardBorder: '#888888', cardBg: 'rgba(46,46,46,0.35)',   cardGlow: 'rgba(136,136,136,0.3)', pitchTint: 'rgba(46,46,46,0.10)',   textAccent: '#cccccc', pillActive: 'rgba(136,136,136,0.2)', pillBorder: '#888888', label: 'DFB Pokal',                   vibe: 'Cup upset season.' },
+  SPK:  { primary: '#111111', accent: '#e8c84a', cardBorder: '#e8c84a', cardBg: 'rgba(26,26,26,0.35)',   cardGlow: 'rgba(232,200,74,0.4)',  pitchTint: 'rgba(26,26,26,0.10)',   textAccent: '#e8c84a', pillActive: 'rgba(232,200,74,0.2)',  pillBorder: '#e8c84a', label: 'DFL Super Cup',               vibe: 'Domestic supremacy.' },
+  // SPAIN
+  LL:   { primary: '#1a0003', accent: '#ffd700', cardBorder: '#ee1623', cardBg: 'rgba(238,22,35,0.18)',  cardGlow: 'rgba(238,22,35,0.4)',   pitchTint: 'rgba(238,22,35,0.07)',  textAccent: '#ffd700', pillActive: 'rgba(238,22,35,0.25)', pillBorder: '#ee1623', label: 'La Liga',                     vibe: 'Tiki-taka. Classics.' },
+  CDR:  { primary: '#1a0038', accent: '#cc99ff', cardBorder: '#9933ff', cardBg: 'rgba(26,0,56,0.35)',    cardGlow: 'rgba(153,51,255,0.4)',  pitchTint: 'rgba(26,0,56,0.12)',    textAccent: '#cc99ff', pillActive: 'rgba(153,51,255,0.25)', pillBorder: '#9933ff', label: 'Copa del Rey',                vibe: 'Royal knockout.' },
+  SSP:  { primary: '#1a0003', accent: '#f1bf00', cardBorder: '#c60b1e', cardBg: 'rgba(198,11,30,0.2)',   cardGlow: 'rgba(198,11,30,0.4)',   pitchTint: 'rgba(198,11,30,0.08)',  textAccent: '#f1bf00', pillActive: 'rgba(198,11,30,0.25)', pillBorder: '#c60b1e', label: 'Supercopa de España',         vibe: 'El Clásico en Riad.' },
+  // FRANCE
+  L1:   { primary: '#000d2e', accent: '#6699ff', cardBorder: '#0033cc', cardBg: 'rgba(0,20,137,0.25)',   cardGlow: 'rgba(0,51,204,0.4)',    pitchTint: 'rgba(0,20,137,0.10)',   textAccent: '#6699ff', pillActive: 'rgba(0,51,204,0.25)',  pillBorder: '#0033cc', label: 'Ligue 1',                     vibe: 'Paris nights.' },
+  CDF:  { primary: '#000f22', accent: '#6699cc', cardBorder: '#002e6e', cardBg: 'rgba(0,46,110,0.35)',   cardGlow: 'rgba(0,46,110,0.4)',    pitchTint: 'rgba(0,46,110,0.12)',   textAccent: '#6699cc', pillActive: 'rgba(0,46,110,0.3)',   pillBorder: '#002e6e', label: 'Coupe de France',             vibe: 'Cup surprise incoming.' },
+  TSC:  { primary: '#101020', accent: '#f0c060', cardBorder: '#c8963c', cardBg: 'rgba(26,26,46,0.35)',   cardGlow: 'rgba(200,150,60,0.4)',  pitchTint: 'rgba(26,26,46,0.12)',   textAccent: '#f0c060', pillActive: 'rgba(200,150,60,0.2)',  pillBorder: '#c8963c', label: 'Trophée des Champions',      vibe: 'Season curtain raiser.' },
+  // ITALY
+  SA:   { primary: '#00112e', accent: '#66aaff', cardBorder: '#0057b7', cardBg: 'rgba(0,63,138,0.22)',   cardGlow: 'rgba(0,87,183,0.4)',    pitchTint: 'rgba(0,63,138,0.10)',   textAccent: '#66aaff', pillActive: 'rgba(0,87,183,0.3)',   pillBorder: '#0057b7', label: 'Serie A',                     vibe: 'Catenaccio reborn.' },
+  CPI:  { primary: '#051508', accent: '#00cc55', cardBorder: '#004422', cardBg: 'rgba(10,32,64,0.35)',   cardGlow: 'rgba(0,68,34,0.4)',     pitchTint: 'rgba(10,32,64,0.12)',   textAccent: '#00cc55', pillActive: 'rgba(0,68,34,0.25)',   pillBorder: '#004422', label: 'Coppa Italia',                vibe: 'Italian cup fire.' },
+  SCI:  { primary: '#0d0800', accent: '#f5c518', cardBorder: '#8b7300', cardBg: 'rgba(26,10,0,0.35)',    cardGlow: 'rgba(139,115,0,0.4)',   pitchTint: 'rgba(26,10,0,0.10)',    textAccent: '#f5c518', pillActive: 'rgba(139,115,0,0.2)',  pillBorder: '#8b7300', label: 'Supercoppa Italiana',         vibe: 'Italian prestige.' },
+  // NETHERLANDS
+  ERE:  { primary: '#1a0a00', accent: '#ff8833', cardBorder: '#ff6200', cardBg: 'rgba(255,98,0,0.15)',   cardGlow: 'rgba(255,98,0,0.45)',   pitchTint: 'rgba(255,98,0,0.06)',   textAccent: '#ff8833', pillActive: 'rgba(255,98,0,0.25)',  pillBorder: '#ff6200', label: 'Eredivisie',                  vibe: 'Total football lives here.' },
+  KNV:  { primary: '#001030', accent: '#6699ff', cardBorder: '#00338d', cardBg: 'rgba(0,51,141,0.25)',   cardGlow: 'rgba(0,51,141,0.4)',    pitchTint: 'rgba(0,51,141,0.10)',   textAccent: '#6699ff', pillActive: 'rgba(0,51,141,0.3)',   pillBorder: '#00338d', label: 'KNVB Cup',                    vibe: 'Dutch knockout.' },
+  JCS:  { primary: '#101010', accent: '#f0c060', cardBorder: '#c8963c', cardBg: 'rgba(26,26,26,0.35)',   cardGlow: 'rgba(200,150,60,0.4)',  pitchTint: 'rgba(26,26,26,0.10)',   textAccent: '#f0c060', pillActive: 'rgba(200,150,60,0.2)',  pillBorder: '#c8963c', label: 'Johan Cruyff Schaal',         vibe: 'Legacy of the master.' },
+  // PORTUGAL
+  PPL:  { primary: '#001800', accent: '#00cc44', cardBorder: '#009900', cardBg: 'rgba(0,102,0,0.2)',     cardGlow: 'rgba(0,153,0,0.4)',     pitchTint: 'rgba(0,102,0,0.08)',    textAccent: '#00cc44', pillActive: 'rgba(0,153,0,0.25)',   pillBorder: '#009900', label: 'Liga Portugal',               vibe: 'Dragon country.' },
+  TCP:  { primary: '#000d22', accent: '#6699ff', cardBorder: '#003399', cardBg: 'rgba(0,51,153,0.25)',   cardGlow: 'rgba(0,51,153,0.4)',    pitchTint: 'rgba(0,51,153,0.10)',   textAccent: '#6699ff', pillActive: 'rgba(0,51,153,0.3)',   pillBorder: '#003399', label: 'Taça de Portugal',            vibe: 'Portuguese cup pride.' },
+  TDL:  { primary: '#101020', accent: '#f0c060', cardBorder: '#c8963c', cardBg: 'rgba(26,26,46,0.35)',   cardGlow: 'rgba(200,150,60,0.4)',  pitchTint: 'rgba(26,26,46,0.12)',   textAccent: '#f0c060', pillActive: 'rgba(200,150,60,0.2)',  pillBorder: '#c8963c', label: 'Taça da Liga',                vibe: 'League Cup Iberia.' },
+  SCP:  { primary: '#060010', accent: '#f5c518', cardBorder: '#8b7300', cardBg: 'rgba(10,10,30,0.35)',   cardGlow: 'rgba(139,115,0,0.4)',   pitchTint: 'rgba(10,10,30,0.10)',   textAccent: '#f5c518', pillActive: 'rgba(139,115,0,0.2)',  pillBorder: '#8b7300', label: 'Supertaça Cândido de Oliveira', vibe: 'Portuguese prestige.' },
+  // UEFA
+  UCL:  { primary: '#000d2a', accent: '#4d88ff', cardBorder: '#1c4fd8', cardBg: 'rgba(0,13,42,0.55)',   cardGlow: 'rgba(28,79,216,0.6)',   pitchTint: 'rgba(0,13,42,0.22)',    textAccent: '#6a9fff', pillActive: 'rgba(28,79,216,0.35)', pillBorder: '#1c4fd8', label: 'Champions League',            vibe: 'The pinnacle. No mercy.' },
+  UEL:  { primary: '#140800', accent: '#ff8844', cardBorder: '#cc4400', cardBg: 'rgba(26,13,0,0.45)',   cardGlow: 'rgba(204,68,0,0.5)',    pitchTint: 'rgba(26,13,0,0.15)',    textAccent: '#ff8844', pillActive: 'rgba(204,68,0,0.3)',   pillBorder: '#cc4400', label: 'Europa League',               vibe: 'Thursday night stories.' },
+  UECL: { primary: '#001208', accent: '#00ee66', cardBorder: '#008833', cardBg: 'rgba(0,26,13,0.45)',   cardGlow: 'rgba(0,136,51,0.5)',    pitchTint: 'rgba(0,26,13,0.15)',    textAccent: '#00ee66', pillActive: 'rgba(0,136,51,0.3)',   pillBorder: '#008833', label: 'Conference League',           vibe: 'The road less travelled.' },
+  USC:  { primary: '#0a0020', accent: '#cc77ff', cardBorder: '#6600cc', cardBg: 'rgba(10,0,32,0.50)',   cardGlow: 'rgba(102,0,204,0.55)',  pitchTint: 'rgba(10,0,32,0.18)',    textAccent: '#cc77ff', pillActive: 'rgba(102,0,204,0.3)',  pillBorder: '#6600cc', label: 'UEFA Super Cup',              vibe: 'Champions vs Champions.' },
+  // FRIENDLY
+  FRN:  { primary: '#8a8a8a', accent: '#c0c0c0', cardBorder: 'rgba(180,180,180,0.35)', cardBg: 'linear-gradient(160deg, rgba(60,60,60,0.4), rgba(20,20,20,0.6))', cardGlow: 'rgba(180,180,180,0.12)', pitchTint: 'rgba(180,180,180,0.04)', textAccent: '#b0b0b0', pillActive: 'rgba(180,180,180,0.1)', pillBorder: 'rgba(180,180,180,0.35)', label: 'Friendly', vibe: 'CONCEPT SQUAD' },
+}
+
+const DEFAULT_THEME = COMPETITION_THEMES.FRN
 
 // ── Position grouping ──────────────────────────────────────────────────────
 
@@ -271,22 +301,22 @@ function isCompatibleForSlot(player, slotType) {
   const pos = player.api_position || player.position || 'CM'
   const COMPAT = {
     GK:  ['GK'],
-    LB:  ['LB', 'LWB', 'CB'],
-    RB:  ['RB', 'RWB', 'CB'],
-    CB:  ['CB', 'LB', 'RB', 'CDM'],
-    LWB: ['LWB', 'LB', 'LM'],
-    RWB: ['RWB', 'RB', 'RM'],
-    CDM: ['CDM', 'CM', 'CB'],
+    LB:  ['LB', 'LWB', 'CB', 'RB'],
+    RB:  ['RB', 'RWB', 'CB', 'LB'],
+    CB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
+    LWB: ['LWB', 'LB', 'LM', 'RWB'],
+    RWB: ['RWB', 'RB', 'RM', 'LWB'],
+    CDM: ['CDM', 'CM', 'CB', 'CAM'],
     CM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
-    LM:  ['LM', 'LW', 'CM', 'LWB'],
-    RM:  ['RM', 'RW', 'CM', 'RWB'],
-    CAM: ['CAM', 'CM', 'LW', 'RW'],
+    LM:  ['LM', 'LW', 'CM', 'LWB', 'RM'],
+    RM:  ['RM', 'RW', 'CM', 'RWB', 'LM'],
+    CAM: ['CAM', 'CM', 'LW', 'RW', 'CDM', 'ST', 'CF'],
     LAM: ['LAM', 'CAM', 'LW', 'CM'],
     RAM: ['RAM', 'CAM', 'RW', 'CM'],
-    LW:  ['LW', 'LM', 'CAM', 'ST'],
-    RW:  ['RW', 'RM', 'CAM', 'ST'],
-    ST:  ['ST', 'CF', 'LW', 'RW'],
-    CF:  ['CF', 'ST', 'CAM'],
+    LW:  ['LW', 'LM', 'CAM', 'ST', 'RW'],
+    RW:  ['RW', 'RM', 'CAM', 'ST', 'LW'],
+    ST:  ['ST', 'CF', 'LW', 'RW', 'CAM'],
+    CF:  ['CF', 'ST', 'CAM', 'LW', 'RW'],
   }
   if (slotType === 'GK') return pos === 'GK'
   if (pos === 'GK') return slotType === 'GK'
@@ -294,10 +324,78 @@ function isCompatibleForSlot(player, slotType) {
   return allowed.includes(pos)
 }
 
+// ── Sub Doctrine helpers ───────────────────────────────────────────────────
+
+const SCENARIOS = {
+  winning2: 'Winning by 2+',
+  winning1: 'Winning by 1',
+  drawing:  'Drawing',
+  losing1:  'Losing by 1',
+  losing2:  'Losing by 2+',
+}
+
+const SCENARIO_TO_COL = {
+  winning2: 'winning',
+  winning1: 'winning',
+  drawing:  'drawing',
+  losing1:  'losing',
+  losing2:  'losing',
+}
+
+const DOC_POS_GROUP = {
+  GK: 'GK',
+  CB: 'DEF', LB: 'DEF', RB: 'DEF', LWB: 'DEF', RWB: 'DEF',
+  CDM: 'MID', CM: 'MID', LM: 'MID', RM: 'MID',
+  CAM: 'MID', LAM: 'MID', RAM: 'MID',
+  LW: 'ATT', RW: 'ATT', ST: 'ATT', CF: 'ATT', SS: 'ATT',
+}
+
+function getCompatibility(offPlayer, onPlayer) {
+  if (!offPlayer || !onPlayer) return null
+  const offPos = offPlayer.assigned_slot || offPlayer.api_position || 'CM'
+  const onPos  = onPlayer.api_position  || onPlayer.position       || 'CM'
+  const og = DOC_POS_GROUP[offPos] || 'MID'
+  const ig = DOC_POS_GROUP[onPos]  || 'MID'
+  if (og === 'GK' || ig === 'GK')
+    return og === ig
+      ? { symbol: '✓', label: 'Direct match', cls: 'compat-ok' }
+      : { symbol: '❌', label: 'Invalid', cls: 'compat-bad' }
+  if (og === ig) return { symbol: '✓', label: 'Direct match', cls: 'compat-ok' }
+  const adj = (og === 'DEF' && ig === 'MID') || (og === 'MID' && ig === 'DEF') ||
+              (og === 'MID' && ig === 'ATT') || (og === 'ATT' && ig === 'MID')
+  return adj
+    ? { symbol: '⚠', label: 'Stretched', cls: 'compat-warn' }
+    : { symbol: '❌', label: 'Invalid',   cls: 'compat-bad' }
+}
+
+function getArchetype(player) {
+  const pos = player.api_position || player.position || 'CM'
+  if (pos === 'GK')  return 'Shot-stopper'
+  if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'Defensive cover'
+  if (pos === 'CDM') return 'Defensive screen'
+  if (['LM', 'RM'].includes(pos))  return 'Width'
+  if (['CM'].includes(pos))        return 'Energy injection'
+  if (['CAM', 'LAM', 'RAM'].includes(pos)) return 'Creative spark'
+  if (['LW', 'RW'].includes(pos))  return 'Width'
+  if (['ST', 'CF', 'SS'].includes(pos)) return 'Attacking threat'
+  return 'Tactical change'
+}
+
+function getImpactScore(player) {
+  return Math.min(99, Math.round((player.overall || 75) * 0.6 + 30))
+}
+
+const PRINT_SLOT_ORDER = [
+  'GK', 'LB', 'LWB', 'CB', 'RCB', 'RB', 'RWB',
+  'CDM', 'LM', 'CM', 'RM', 'LAM', 'CAM', 'RAM',
+  'LW', 'RW', 'ST', 'CF', 'SS',
+]
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function Planner() {
   const { selectedTeam, fetchSquad } = useTeam()
+  const navigate = useNavigate()
   const teamName = selectedTeam?.name ?? null
   const teamId   = selectedTeam?.id ?? null
 
@@ -373,6 +471,22 @@ export default function Planner() {
 
   useEffect(() => { setPlayerStatuses({}) }, [teamId])
 
+  // ── Squad Manager / Toast ────────────────────────────────────────────────
+  const [showSquadManager, setShowSquadManager] = useState(false)
+  const [savedSquads,      setSavedSquads]      = useState(() =>
+    getSavedSquads().filter(s => s.teamId === selectedTeam?.id)
+  )
+
+  useEffect(() => {
+    setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id))
+  }, [selectedTeam?.id])
+  const [toast,            setToast]            = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
   // ── XI Builder state ─────────────────────────────────────────────────────
   const [builderFormation, setBuilderFormation] = useState('4-3-3')
   const [builtXI,          setBuiltXI]          = useState({})
@@ -395,24 +509,191 @@ export default function Planner() {
 
   const placedCount = Object.values(builtXI).filter(Boolean).length
 
-  const handleLoadIntoConsole = () => {
-    const xi = Object.entries(builtXI)
-      .filter(([, p]) => p !== null && p !== undefined)
+  // ── Sub Doctrine state ────────────────────────────────────────────────────
+  const [docSlots, setDocSlots] = useState([
+    { minute: 60, scenario: 'drawing',  subOff: '', subOn: '' },
+    { minute: 70, scenario: 'losing1',  subOff: '', subOn: '' },
+    { minute: 80, scenario: 'winning2', subOff: '', subOn: '' },
+  ])
+
+  const updateDocSlot = (i, field, value) =>
+    setDocSlots(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+
+  // Active XI for doctrine: builtXI if complete, else startingXI
+  const doctrineXI = useMemo(() => {
+    const placed = Object.entries(builtXI)
+      .filter(([, p]) => p)
       .map(([key, player]) => {
         const slotDef = BUILDER_SLOTS[builderFormation].find(s => s.key === key)
         return { ...player, assigned_slot: slotDef?.slot || player.api_position }
       })
+    return placed.length === 11 ? placed : startingXI
+  }, [builtXI, builderFormation, startingXI])
+
+  const doctrineBench = useMemo(() =>
+    matchdayBench.filter(p => !excludedPlayers.includes(p.name)),
+    [matchdayBench, excludedPlayers]
+  )
+
+  const doctrineXILabel = Object.values(builtXI).filter(Boolean).length === 11
+    ? 'XI Builder lineup'
+    : 'default squad lineup'
+
+  const buildPrintContent = () => {
+    const sep = '═══════════════════════════════'
+    const rows = [
+      sep,
+      'TACTICAL BRIEFING',
+      `${teamName || 'Unknown Team'} vs [Opponent]`,
+      `Competition: ${theme.label}`,
+      `Formation: ${builderFormation}`,
+      sep, '',
+      'STARTING XI:',
+    ]
+    const xiSorted = [...doctrineXI].sort((a, b) => {
+      const ai = PRINT_SLOT_ORDER.indexOf(a.assigned_slot || a.api_position)
+      const bi = PRINT_SLOT_ORDER.indexOf(b.assigned_slot || b.api_position)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+    xiSorted.forEach(p =>
+      rows.push(`${(p.assigned_slot || p.api_position || '??').padEnd(5)}: ${p.short_name || p.name}`)
+    )
+    rows.push('', 'PLANNED SUBSTITUTIONS:')
+    const filled = docSlots.filter(s => s.subOff && s.subOn)
+    if (!filled.length) {
+      rows.push('None configured.')
+    } else {
+      filled.forEach(s => {
+        const offP = doctrineXI.find(p => p.name === s.subOff)
+        const onP  = doctrineBench.find(p => p.name === s.subOn)
+        rows.push(`${s.minute}' — If ${SCENARIOS[s.scenario]}:`)
+        rows.push(`  Sub OFF: ${offP?.short_name || s.subOff} (${offP?.assigned_slot || offP?.api_position || '?'})`)
+        rows.push(`  Sub ON:  ${onP?.short_name || s.subOn} (${onP?.api_position || '?'}) — Impact: ${onP ? getImpactScore(onP) : '—'}, ${onP ? getArchetype(onP) : '—'}`)
+      })
+    }
+    const injNames  = Object.entries(playerStatuses).filter(([, s]) => s === 'injured').map(([n]) => n)
+    const doubNames = Object.entries(playerStatuses).filter(([, s]) => s === 'doubtful').map(([n]) => n)
+    rows.push('', 'SQUAD READINESS:')
+    rows.push(`Injured:  ${injNames.length  ? injNames.join(', ')  : 'None'}`)
+    rows.push(`Doubtful: ${doubNames.length ? doubNames.join(', ') : 'None'}`)
+    rows.push('', `Generated by SubHub — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+    rows.push(sep)
+    return rows.join('\n')
+  }
+
+  // ── Competition theme ────────────────────────────────────────────────────
+  const theme = COMPETITION_THEMES[selectedComp] || DEFAULT_THEME
+
+  const uclStars = useMemo(() =>
+    Array.from({ length: 20 }, (_, i) => ({
+      id:    i,
+      left:  `${5 + (i * 47 + 13) % 88}%`,
+      top:   `${5 + (i * 61 + 7) % 88}%`,
+      delay: `${((i * 370) % 2000) / 1000}s`,
+      size:  i % 3 === 0 ? 3 : i % 3 === 1 ? 2 : 1.5,
+    })),
+    []
+  )
+
+  function buildXIFromBuilder() {
+    return Object.entries(builtXI)
+      .filter(([, p]) => p !== null && p !== undefined)
+      .map(([key, player]) => {
+        const slotDef = BUILDER_SLOTS[builderFormation].find(s => s.key === key)
+        return { ...player, assigned_slot: slotDef?.slot || player.api_position, minute_entered: 0 }
+      })
+  }
+
+  const handleLoadIntoConsole = () => {
+    const xi = buildXIFromBuilder()
     if (xi.length < 11) return
-    try {
-      localStorage.setItem('subhub_custom_xi', JSON.stringify(xi))
-      localStorage.setItem('subhub_custom_formation', builderFormation)
-    } catch {}
-    window.location.href = '/match'
+
+    const activeBench = doctrineBench
+    const excludedPlayerIds = matchdayBench
+      .filter(p => excludedPlayers.includes(p.name))
+      .map(p => p.id)
+
+    navigate(`/match/${teamId}`, {
+      state: {
+        confirmedXI:       xi,
+        confirmedBench:    activeBench,
+        confirmedReserves: [],
+        formation:         builderFormation,
+        playstyle:         null,
+        competition:       selectedComp || null,
+        teamId,
+        excludedPlayerIds,
+      },
+    })
+  }
+
+  const handleSaveSquad = () => {
+    const xi = buildXIFromBuilder()
+    if (xi.length < 11) {
+      showToast('Build a complete XI before saving')
+      return
+    }
+    const teamSquads = getSavedSquads().filter(s => s.teamId === selectedTeam?.id)
+    if (teamSquads.length >= 12) {
+      setShowSquadManager(true)
+      showToast('Squad limit reached for this team — remove one to save a new squad')
+      return
+    }
+    const name = window.prompt('Name this concept squad (e.g. "UCL High Press"):')
+    if (!name) return
+
+    const activeBench = doctrineBench
+    const result = saveSquad({
+      name,
+      competition: selectedComp || 'League',
+      formation:   builderFormation,
+      playstyle:   null,
+      xi,
+      bench:       activeBench,
+      teamId,
+      teamName:    selectedTeam?.name || '',
+    })
+    if (result.success) {
+      setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id))
+      showToast(`✓ "${name}" saved`)
+    }
+  }
+
+  const handleLoadSavedSquad = (squad) => {
+    setShowSquadManager(false)
+    navigate(`/match/${squad.teamId || teamId}`, {
+      state: {
+        confirmedXI:       squad.xi,
+        confirmedBench:    squad.bench ?? [],
+        confirmedReserves: [],
+        formation:         squad.formation,
+        playstyle:         squad.playstyle || null,
+        competition:       squad.competition || null,
+        teamId:            squad.teamId || teamId,
+        excludedPlayerIds: [],
+      },
+    })
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="planner-page">
+    <div
+      className="planner-page"
+      data-comp={selectedComp}
+      style={{
+        '--comp-primary':     theme.primary,
+        '--comp-accent':      theme.accent,
+        '--comp-cardBorder':  theme.cardBorder,
+        '--comp-cardBg':      theme.cardBg,
+        '--comp-cardGlow':    theme.cardGlow,
+        '--comp-pitchTint':   theme.pitchTint,
+        '--comp-textAccent':  theme.textAccent,
+        '--comp-pillActive':  theme.pillActive,
+        '--comp-pillBorder':  theme.pillBorder,
+        background: `radial-gradient(ellipse at 50% 0%, ${theme.primary} 0%, #060a08 60%)`,
+        transition: 'background 0.4s ease',
+      }}
+    >
 
       {/* TOP BAR */}
       <div className="planner-topbar">
@@ -474,6 +755,20 @@ export default function Planner() {
           </div>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
+          <button
+            onClick={() => { setSavedSquads(getSavedSquads()); setShowSquadManager(true) }}
+            style={{
+              background: 'rgba(200,150,60,0.1)', border: '1px solid rgba(200,150,60,0.45)',
+              borderRadius: 6, color: '#c8963e', fontFamily: 'Rajdhani', fontWeight: 700,
+              fontSize: 11, letterSpacing: '0.1em', padding: '5px 12px', cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            📂 MY SAVED SQUADS ({getSavedSquads().filter(s => s.teamId === selectedTeam?.id).length}/12)
+          </button>
+        </div>
+
       </div>
 
       {/* TAB NAVIGATION */}
@@ -496,6 +791,11 @@ export default function Planner() {
         >
           📋 Sub Doctrine
         </button>
+      </div>
+
+      {/* VIBE BANNER */}
+      <div className="comp-vibe-banner">
+        <span className="comp-vibe-label">{theme.label}</span>
       </div>
 
       {/* TAB CONTENT */}
@@ -551,11 +851,11 @@ export default function Planner() {
                 )}
 
                 <div className="status-legend-bar">
-                  <span>🟢 Available</span>
-                  <span>🔴 Injured</span>
-                  <span>🟡 Doubtful</span>
-                  <span>🟠 Suspended</span>
-                  <span>🔵 Managed mins</span>
+                  <span><span className="slb-dot" style={{ background: '#00ff87' }} />Available</span>
+                  <span><span className="slb-dot" style={{ background: '#ff3d3d' }} />Injured</span>
+                  <span><span className="slb-dot" style={{ background: '#ffb800' }} />Doubtful</span>
+                  <span><span className="slb-dot" style={{ background: '#ff8c00' }} />Suspended</span>
+                  <span><span className="slb-dot" style={{ background: '#3d9fff' }} />Managed mins</span>
                 </div>
 
                 {Object.entries(groupedSquad).map(([group, players]) =>
@@ -670,6 +970,14 @@ export default function Planner() {
                 >
                   ⚡ Load into Console
                 </button>
+                <button
+                  className="builder-load-btn"
+                  disabled={placedCount < 11}
+                  onClick={handleSaveSquad}
+                  style={{ background: 'rgba(200,150,60,0.12)', borderColor: 'rgba(200,150,60,0.5)', color: '#c8963e' }}
+                >
+                  💾 Save Squad
+                </button>
               </div>
             </div>
 
@@ -688,6 +996,23 @@ export default function Planner() {
               {/* LEFT — Pitch */}
               <div className="builder-pitch-wrapper">
                 <div className="builder-pitch">
+                  {selectedComp === 'UCL' && (
+                    <div className="ucl-stars" aria-hidden="true">
+                      {uclStars.map(s => (
+                        <div
+                          key={s.id}
+                          className="ucl-star"
+                          style={{
+                            left:           s.left,
+                            top:            s.top,
+                            width:          s.size,
+                            height:         s.size,
+                            animationDelay: s.delay,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {BUILDER_SLOTS[builderFormation].map(slotDef => {
                     const player = builtXI[slotDef.key]
                     return (
@@ -807,12 +1132,176 @@ export default function Planner() {
         {/* ── SUB DOCTRINE ── */}
         {activeTab === 'doctrine' && (
           <div className="tab-doctrine">
-            <div className="tab-placeholder">
-              <span>📋</span>
-              <h3>Sub Doctrine</h3>
-              <p>Plan your substitutions before kickoff.
-                 Coming in Sprint 4.</p>
+
+            <div className="doctrine-header">
+              <div className="doctrine-title">
+                <h2>SUB DOCTRINE</h2>
+                <p>
+                  Plan your 3 substitutions before kickoff.
+                  {' '}Using <strong>{doctrineXILabel}</strong>.
+                  {doctrineBench.length === 0 && ' — Load a squad first.'}
+                </p>
+              </div>
             </div>
+
+            {/* ── 3 Sub Slot Cards ── */}
+            <div className="doctrine-slots">
+              {docSlots.map((slot, i) => {
+                const subOffPlayer = doctrineXI.find(p => p.name === slot.subOff)
+                const subOnPlayer  = doctrineBench.find(p => p.name === slot.subOn)
+                const compat       = getCompatibility(subOffPlayer, subOnPlayer)
+                const impact       = subOnPlayer ? getImpactScore(subOnPlayer) : null
+                const archetype    = subOnPlayer ? getArchetype(subOnPlayer)   : null
+
+                return (
+                  <div key={i} className="doctrine-slot-card">
+
+                    <div className="dsc-header">
+                      <span className="dsc-label">SUB {i + 1}</span>
+                      <span className="dsc-minute-badge">{slot.minute}'</span>
+                    </div>
+
+                    <div className="dsc-controls">
+
+                      {/* Minute slider */}
+                      <div className="dsc-field">
+                        <label className="dsc-field-label">TRIGGER MINUTE</label>
+                        <div className="dsc-slider-row">
+                          <input
+                            type="range" min="45" max="90"
+                            value={slot.minute}
+                            className="dsc-slider"
+                            onChange={e => updateDocSlot(i, 'minute', Number(e.target.value))}
+                          />
+                          <span className="dsc-slider-val">{slot.minute}'</span>
+                        </div>
+                      </div>
+
+                      {/* Scenario */}
+                      <div className="dsc-field">
+                        <label className="dsc-field-label">SCENARIO</label>
+                        <select
+                          className="dsc-select"
+                          value={slot.scenario}
+                          onChange={e => updateDocSlot(i, 'scenario', e.target.value)}
+                        >
+                          {Object.entries(SCENARIOS).map(([val, label]) => (
+                            <option key={val} value={val}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Sub OFF / Sub ON row */}
+                      <div className="dsc-swap-row">
+                        <div className="dsc-field dsc-swap-field">
+                          <label className="dsc-field-label">SUB OFF ↓</label>
+                          <select
+                            className="dsc-select"
+                            value={slot.subOff}
+                            onChange={e => updateDocSlot(i, 'subOff', e.target.value)}
+                          >
+                            <option value="">— Select player —</option>
+                            {doctrineXI.map(p => (
+                              <option key={p.name} value={p.name}>
+                                {(p.assigned_slot || p.api_position || '?').padEnd(4)} · {p.short_name || p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="dsc-swap-arrow">⇄</div>
+
+                        <div className="dsc-field dsc-swap-field">
+                          <label className="dsc-field-label">SUB ON ↑</label>
+                          <select
+                            className="dsc-select"
+                            value={slot.subOn}
+                            onChange={e => updateDocSlot(i, 'subOn', e.target.value)}
+                          >
+                            <option value="">— Select player —</option>
+                            {doctrineBench.map(p => (
+                              <option key={p.name} value={p.name}>
+                                {(p.api_position || '?').padEnd(4)} · {p.short_name || p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Analysis bar */}
+                    {slot.subOff && slot.subOn && (
+                      <div className="dsc-analysis">
+                        {compat && (
+                          <span className={`dsc-compat ${compat.cls}`}>
+                            {compat.symbol} {compat.label}
+                          </span>
+                        )}
+                        {impact !== null && (
+                          <span className="dsc-impact">
+                            Expected impact: <strong>{impact}</strong> · {archetype}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ── Scenario Preview ── */}
+            <div className="doctrine-preview">
+              <div className="doctrine-preview-header">SCENARIO PREVIEW</div>
+              <div className="scenario-grid">
+                {[
+                  { col: 'winning', label: 'WINNING', color: '#00ff87' },
+                  { col: 'drawing', label: 'DRAWING', color: '#ffb800' },
+                  { col: 'losing',  label: 'LOSING',  color: '#ff3d3d' },
+                ].map(({ col, label, color }) => {
+                  const hits  = docSlots
+                    .map((s, i) => ({ ...s, i }))
+                    .filter(s => SCENARIO_TO_COL[s.scenario] === col && s.subOff && s.subOn)
+                  const delta = col === 'winning' ? '+2–4%' : col === 'drawing' ? '+3–5%' : '+1–3%'
+                  return (
+                    <div key={col} className="scenario-col">
+                      <div className="scenario-col-header" style={{ color, borderColor: color }}>
+                        {label}
+                      </div>
+                      {hits.length === 0 ? (
+                        <div className="scenario-no-sub">No sub planned</div>
+                      ) : hits.map(s => {
+                        const offP = doctrineXI.find(p => p.name === s.subOff)
+                        const onP  = doctrineBench.find(p => p.name === s.subOn)
+                        return (
+                          <div key={s.i} className="scenario-sub-entry">
+                            <div className="sse-minute" style={{ color }}>{s.minute}'</div>
+                            <div className="sse-players">
+                              <span className="sse-off">{offP?.short_name || s.subOff}</span>
+                              <span className="sse-arrow">→</span>
+                              <span className="sse-on">{onP?.short_name || s.subOn}</span>
+                            </div>
+                            <div className="sse-delta" style={{ color }}>{delta} win prob</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Export Button ── */}
+            <button className="doctrine-export-btn" onClick={() => window.print()}>
+              📋 EXPORT TACTICAL BRIEFING
+            </button>
+
+            {/* ── Print-only content ── */}
+            <div className="tactical-briefing-print">
+              <pre className="tbp-content">{buildPrintContent()}</pre>
+            </div>
+
           </div>
         )}
 
@@ -827,6 +1316,122 @@ export default function Planner() {
           <a href="/leagues" className="planner-select-btn">
             ← Select a Team
           </a>
+        </div>
+      )}
+
+      {/* ── Squad Manager Modal ── */}
+      {showSquadManager && (
+        <div
+          onClick={() => setShowSquadManager(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0a0e08', border: '1.5px solid #c8963e',
+              borderRadius: 12, padding: 24, maxWidth: 860, width: '100%',
+              maxHeight: '80vh', overflowY: 'auto',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <span style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 18, color: '#c8963e', letterSpacing: '0.12em' }}>
+                MY SAVED SQUADS
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {savedSquads.length >= 12 && (
+                  <span style={{ fontFamily: 'Rajdhani', fontSize: 11, color: '#ff3d3d', fontWeight: 700 }}>
+                    12/12 squads saved — delete one to save a new squad
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowSquadManager(false)}
+                  style={{
+                    background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4,
+                    color: 'var(--muted)', fontSize: 11, fontFamily: 'Rajdhani', fontWeight: 700,
+                    cursor: 'pointer', padding: '3px 9px', letterSpacing: '0.06em',
+                  }}
+                >✕ CLOSE</button>
+              </div>
+            </div>
+
+            {/* 12-slot grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+              {Array.from({ length: 12 }).map((_, i) => {
+                const squad     = savedSquads[i]
+                const compTheme = COMPETITION_THEMES[squad?.competition] || DEFAULT_THEME
+                if (!squad) {
+                  return (
+                    <div key={i} style={{
+                      border: '1px dashed rgba(200,150,60,0.22)', borderRadius: 8,
+                      height: 135, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'rgba(200,150,60,0.22)', fontSize: 28,
+                    }}>+</div>
+                  )
+                }
+                return (
+                  <div key={squad.id} style={{
+                    position: 'relative', border: `1px solid ${compTheme.cardBorder || '#c8963e'}`,
+                    borderRadius: 8, padding: '10px 10px 40px',
+                    background: compTheme.cardBg || 'rgba(20,20,20,0.6)',
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                  }}>
+                    {/* Delete */}
+                    <button
+                      onClick={() => { deleteSquad(squad.id); setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id)) }}
+                      style={{
+                        position: 'absolute', top: 6, right: 6,
+                        background: 'rgba(255,61,61,0.8)', border: 'none', borderRadius: 3,
+                        color: '#fff', fontSize: 9, fontFamily: 'Rajdhani', fontWeight: 700,
+                        padding: '2px 5px', cursor: 'pointer',
+                      }}
+                    >✕</button>
+                    <div style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 13, color: compTheme.textAccent || '#c8963e', lineHeight: 1.2, paddingRight: 18 }}>
+                      {squad.name}
+                    </div>
+                    <div style={{ fontFamily: 'Rajdhani', fontSize: 10, color: 'var(--muted)' }}>
+                      {squad.teamName || '—'}
+                    </div>
+                    <div style={{ fontFamily: 'Rajdhani', fontSize: 10, color: compTheme.accent || '#c8963e', fontWeight: 600 }}>
+                      {squad.competition} · {squad.formation}
+                    </div>
+                    <div style={{ fontFamily: 'Rajdhani', fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>
+                      {new Date(squad.savedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
+                    </div>
+                    {/* Load */}
+                    <button
+                      onClick={() => handleLoadSavedSquad(squad)}
+                      style={{
+                        position: 'absolute', bottom: 6, left: 6, right: 6,
+                        background: 'rgba(200,150,60,0.15)', border: '1px solid #c8963e',
+                        borderRadius: 4, color: '#c8963e', fontSize: 10,
+                        fontFamily: 'Rajdhani', fontWeight: 700, padding: '5px 0',
+                        cursor: 'pointer', letterSpacing: '0.08em',
+                      }}
+                    >⚡ LOAD INTO CONSOLE</button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(10,14,8,0.95)', border: '1px solid rgba(200,150,60,0.5)',
+          borderRadius: 8, padding: '10px 20px', zIndex: 2000,
+          fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 13, color: '#c8963e',
+          letterSpacing: '0.06em', pointerEvents: 'none',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+        }}>
+          {toast}
         </div>
       )}
 

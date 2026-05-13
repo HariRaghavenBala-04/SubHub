@@ -5,7 +5,7 @@
  * See LICENSE file for full terms.
  */
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
   PointerSensor, TouchSensor, useSensor, useSensors,
@@ -17,6 +17,8 @@ import PlayerCard from '../components/PlayerCard'
 import { useTeam } from '../context/TeamContext'
 import { FORMATIONS, FORMATION_KEYS } from '../data/formations'
 import { computeStamina, computeClientRecs, isCompatibleDrop, getGameStatusText } from '../utils/football'
+import { getSavedSquads } from '../utils/squadStorage'
+import { UEFA_ELIGIBILITY } from '../utils/uefaEligibility'
 
 const INTENTS = [
   { value: 'protect_lead', label: '🛡 Protect Lead' },
@@ -24,8 +26,211 @@ const INTENTS = [
   { value: 'tactical',     label: '🔄 Tactical'     },
 ]
 
+// ── Competition format — drives ET/PK rules ───────────────────────────────
+const COMPETITION_FORMAT = {
+  // Five major leagues — 90-minute, no knockout rules
+  PL:   { name: 'Premier League',     hasET: false, straightToPKs: false },
+  PD:   { name: 'La Liga',            hasET: false, straightToPKs: false },
+  BL1:  { name: 'Bundesliga',         hasET: false, straightToPKs: false },
+  SA:   { name: 'Serie A',            hasET: false, straightToPKs: false },
+  FL1:  { name: 'Ligue 1',            hasET: false, straightToPKs: false },
+  // European knockout cups — ET then PKs
+  UCL:  { name: 'Champions League',   hasET: true,  straightToPKs: false },
+  UEL:  { name: 'Europa League',      hasET: true,  straightToPKs: false },
+  UECL: { name: 'Conference League',  hasET: true,  straightToPKs: false },
+  // Domestic cups — ET then PKs
+  FAC:  { name: 'FA Cup',             hasET: true,  straightToPKs: false },
+  ELC:  { name: 'Carabao Cup',        hasET: true,  straightToPKs: false },
+  DFB:  { name: 'DFB Pokal',          hasET: true,  straightToPKs: false },
+  CDR:  { name: 'Copa del Rey',       hasET: true,  straightToPKs: false },
+  CIT:  { name: 'Coppa Italia',       hasET: true,  straightToPKs: false },
+  // Straight-to-PKs formats (no ET)
+  CS:   { name: 'Community Shield',   hasET: false, straightToPKs: true  },
+  SC:   { name: 'UEFA Super Cup',     hasET: false, straightToPKs: true  },
+  // Full display string aliases — matched when dropdown sets competition state
+  'Champions League':        { hasET: true,  straightToPKs: false },
+  'Europa League':           { hasET: true,  straightToPKs: false },
+  'Conference League':       { hasET: true,  straightToPKs: false },
+  'FA Cup':                  { hasET: true,  straightToPKs: false },
+  'Carabao Cup':             { hasET: true,  straightToPKs: false },
+  'Coupe de France':         { hasET: true,  straightToPKs: false },
+  'DFB Pokal':               { hasET: true,  straightToPKs: false },
+  'Copa del Rey':            { hasET: true,  straightToPKs: false },
+  'Coppa Italia':            { hasET: true,  straightToPKs: false },
+  'KNVB Cup':                { hasET: true,  straightToPKs: false },
+  'Taça de Portugal':        { hasET: true,  straightToPKs: false },
+  'Community Shield':        { hasET: false, straightToPKs: true  },
+  'UEFA Super Cup':          { hasET: false, straightToPKs: true  },
+  'Trophée des Champions':   { hasET: false, straightToPKs: true  },
+  'DFL Super Cup':           { hasET: false, straightToPKs: true  },
+  'Supercopa de España':     { hasET: false, straightToPKs: true  },
+  'Supercoppa Italiana':     { hasET: false, straightToPKs: true  },
+  'Johan Cruyff Shield':     { hasET: false, straightToPKs: true  },
+  'Supertaça':               { hasET: false, straightToPKs: true  },
+  'Premier League':          { hasET: false, straightToPKs: false },
+  'La Liga':                 { hasET: false, straightToPKs: false },
+  'Bundesliga':              { hasET: false, straightToPKs: false },
+  'Serie A':                 { hasET: false, straightToPKs: false },
+  'Ligue 1':                 { hasET: false, straightToPKs: false },
+  'Eredivisie':              { hasET: false, straightToPKs: false },
+  'Primeira Liga':           { hasET: false, straightToPKs: false },
+  'Friendly':                { hasET: false, straightToPKs: false },
+}
+
+function getCompetitionFormat(comp) {
+  return COMPETITION_FORMAT[comp] ?? { name: comp || 'League', hasET: false, straightToPKs: false }
+}
+
+// ── Competitions allowed per league ───────────────────────────────────────────
+const LEAGUE_COMPETITIONS = {
+  PL:  ['Premier League','FA Cup','Carabao Cup','Community Shield'],
+  PD:  ['La Liga','Copa del Rey','Supercopa de España'],
+  BL1: ['Bundesliga','DFB Pokal','DFL Super Cup'],
+  SA:  ['Serie A','Coppa Italia','Supercoppa Italiana'],
+  FL1: ['Ligue 1','Coupe de France','Trophée des Champions'],
+  DED: ['Eredivisie','KNVB Cup','Johan Cruyff Shield'],
+  PPL: ['Primeira Liga','Taça de Portugal','Supertaça'],
+}
+
+function getMatchPhase(minute, hasET) {
+  if (minute <= 45)              return { label: '1ST HALF',      color: 'var(--green)' }
+  if (minute <= 90 || !hasET)   return { label: '2ND HALF',      color: 'var(--green)' }
+  if (minute <= 105)             return { label: 'EXTRA TIME 1',  color: 'var(--amber)' }
+  if (minute <= 120)             return { label: 'EXTRA TIME 2',  color: '#ff6464' }
+  return                                { label: 'PENALTIES',     color: '#ff3d3d' }
+}
+
+function getMinuteDisplay(minute) {
+  if (minute <= 90)  return `${minute}'`
+  if (minute <= 105) return `90+${minute - 90}'`
+  if (minute <= 120) return `105+${minute - 105}'`
+  return 'PK'
+}
+
+// ── Formation slot order — defines pitchPlayers array index → slot mapping ──
+const FORMATION_SLOT_ORDER = {
+  '4-3-3':   ['GK','LB','CB','CB','RB','CM','CM','CM','LW','ST','RW'],
+  '4-4-2':   ['GK','LB','CB','CB','RB','LM','CM','CM','RM','ST','ST'],
+  '4-2-3-1': ['GK','LB','CB','CB','RB','CDM','CDM','LW','CAM','RW','ST'],
+  '3-5-2':   ['GK','CB','CB','CB','LM','CM','CM','CM','RM','ST','ST'],
+  '5-3-2':   ['GK','LB','CB','CB','CB','RB','CM','CM','CM','ST','ST'],
+  '4-5-1':   ['GK','LB','CB','CB','RB','LM','CM','CM','CM','RM','ST'],
+}
+
+function sortXIByFormation(xi, slotOrder) {
+  const used   = new Set()
+  const result = slotOrder.map(slot => {
+    const match = xi.find(p => p.assigned_slot === slot && !used.has(p.id))
+    if (match) { used.add(match.id); return match }
+    return null
+  }).filter(Boolean)
+  const remaining = xi.filter(p => !used.has(p.id))
+  return [...result, ...remaining].slice(0, 11)
+}
+
+// ── Position compatibility tiers ──────────────────────────────────────────
+// Returns: 'natural' | 'stretched' | 'tactical' | 'blocked'
+function getPositionCompatibility(playerPos, slotPos) {
+  if (!playerPos || !slotPos) return 'natural'
+  const pp = playerPos.toUpperCase()
+  const sp = slotPos.toUpperCase()
+  if (pp === sp) return 'natural'
+
+  const ATTACKERS = ['ST','CF','LW','RW','LM','RM','CAM','SS']
+  const DEFENDERS = ['CB','LB','RB','LWB','RWB']
+  const isAttacker   = ATTACKERS.includes(pp)
+  const isDefender   = DEFENDERS.includes(pp)
+  const slotDefender = DEFENDERS.includes(sp)
+  const slotAttacker = ATTACKERS.includes(sp)
+
+  if (pp === 'GK' || sp === 'GK') return 'blocked'
+  if (isAttacker && slotDefender)  return 'blocked'
+  if (isDefender && slotAttacker)  return 'tactical'
+
+  const NATURAL_SWAPS = [
+    ['LB','RB'],   ['LW','RW'],   ['LM','RM'],
+    ['CM','CDM'],  ['CM','CAM'],  ['CDM','CAM'],
+    ['CM','LM'],   ['CM','RM'],
+    ['CAM','LM'],  ['CAM','RM'],
+    ['CDM','LM'],  ['CDM','RM'],
+    ['LWB','LB'],  ['RWB','RB'],
+    ['LWB','LM'],  ['RWB','RM'],
+    ['ST','CF'],   ['CF','ST'],
+  ]
+  if (NATURAL_SWAPS.some(([a, b]) => (pp === a && sp === b) || (pp === b && sp === a)))
+    return 'natural'
+
+  const STRETCHED = [
+    ['CB','CDM'],  ['CB','CM'],
+    ['LB','LM'],   ['RB','RM'],
+    ['LB','LW'],   ['RB','RW'],
+    ['CAM','ST'],  ['CAM','CF'],
+    ['LW','ST'],   ['RW','ST'],
+    ['LM','LW'],   ['RM','RW'],
+  ]
+  if (STRETCHED.some(([a, b]) => (pp === a && sp === b) || (pp === b && sp === a)))
+    return 'stretched'
+
+  return 'tactical'
+}
+
 export default function Match() {
   const { selectedTeam, fetchSquad } = useTeam()
+  const location = useLocation()
+
+  // Reserve IDs + excluded (injured/suspended) players — cannot be subbed on during a match
+  const reserveIds = useMemo(
+    () => new Set([
+      ...(location.state?.confirmedReserves ?? []).map(p => p.id),
+      ...(location.state?.excludedPlayerIds  ?? []),
+    ]),
+    [location.state]
+  )
+
+  // Competition — overridden by route state when arriving from Planner
+  const [competition, setCompetition] = useState(
+    location.state?.competition || ''
+  )
+
+  // Competition format — drives ET/PK rules
+  const compFormat = useMemo(() => getCompetitionFormat(competition), [competition])
+  const sliderMax  = compFormat.hasET ? 130 : 100
+
+  // ET 6th-sub slot tracking
+  const [etSubUsed, setEtSubUsed] = useState(false)
+
+  // Competition selector dropdown
+  const [showCompSelector, setShowCompSelector] = useState(false)
+
+  useEffect(() => {
+    if (!showCompSelector) return
+    const handler = (e) => {
+      if (!e.target.closest('.comp-selector-wrap')) setShowCompSelector(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showCompSelector])
+
+  // Saved squads panel — shown when user arrives without a confirmed XI
+  const [showSavedSquadsPanel, setShowSavedSquadsPanel] = useState(
+    !location.state?.confirmedXI
+  )
+  const [savedSquads, setSavedSquads] = useState(() =>
+    getSavedSquads().filter(s => s.teamId === selectedTeam?.id)
+  )
+
+  useEffect(() => {
+    setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id))
+  }, [selectedTeam?.id])
+
+  // matchStarted gates the sub counter.
+  // True on first render when arriving from Squad.jsx with a confirmed 11-player XI —
+  // every bench→pitch drag immediately counts as a real substitution.
+  // False on direct navigation to /match — START MATCH button flips it manually.
+  const [matchStarted, setMatchStarted] = useState(
+    !!(location.state?.confirmedXI && location.state.confirmedXI.length === 11)
+  )
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor,   { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -65,6 +270,8 @@ export default function Match() {
   const [subArrow,       setSubArrow]       = useState(null)
   const [toast,          setToast]          = useState(null)
   const [shouldReanalyse, setShouldReanalyse] = useState(false)
+  const [urgencyMode,    setUrgencyMode]    = useState(null)
+  const [groupedWindow,  setGroupedWindow]  = useState(null)
 
   // Drag state
   const [activeDrag,      setActiveDrag]      = useState(null)
@@ -75,8 +282,9 @@ export default function Match() {
   const handleAnalyseRef = useRef(null)
 
   // Sub counter + undo
-  const [subsUsed,    setSubsUsed]    = useState(0)
-  const [subHistory,  setSubHistory]  = useState([]) // stack of { pitch, bench, subsUsed }
+  const [subsUsed,        setSubsUsed]        = useState(0)
+  const [subHistory,      setSubHistory]      = useState([]) // stack of { pitch, bench, subsUsed }
+  const [appliedSubNames, setAppliedSubNames] = useState(new Set())
 
   // Bench expand / formation preview
   const [benchExpanded,     setBenchExpanded]     = useState(false)
@@ -100,15 +308,53 @@ export default function Match() {
     fetchSquad(selectedTeam.id, selectedTeam.leagueCode)
       .then(data => {
         const { xi, bench, reserves } = data
-        setPitchPlayers(xi)
-        setBenchPlayers(bench)
-        setReservePlayers(reserves ?? [])
-        setOriginalPitch(xi)
-        setOriginalBench(bench)
+
+        // Prioritise the lineup confirmed on the Squad page over the API default split
+        const confirmedXI       = location.state?.confirmedXI
+        const confirmedBench    = location.state?.confirmedBench
+        const confirmedReserves = location.state?.confirmedReserves
+
+        if (confirmedXI && confirmedXI.length === 11) {
+          const incomingFormation = location.state?.formation || '4-3-3'
+          const slotOrder = FORMATION_SLOT_ORDER[incomingFormation] || FORMATION_SLOT_ORDER['4-3-3']
+          const sorted = sortXIByFormation(confirmedXI, slotOrder)
+          const xiWithEntry = sorted.map(p => ({
+            ...p,
+            minute_entered: 0,
+            outOfPosition: getPositionCompatibility(p.api_position || p.position, p.assigned_slot || p.position),
+          }))
+          setPitchPlayers(xiWithEntry)
+          setOriginalPitch(xiWithEntry)
+          setBenchPlayers(confirmedBench ?? bench)
+          setOriginalBench(confirmedBench ?? bench)
+          setReservePlayers(confirmedReserves ?? reserves ?? [])
+        } else {
+          const xiWithEntry = xi.map(p => ({
+            ...p,
+            minute_entered: 0,
+            outOfPosition: getPositionCompatibility(p.api_position || p.position, p.assigned_slot || p.position),
+          }))
+          setPitchPlayers(xiWithEntry)
+          setOriginalPitch(xiWithEntry)
+          setBenchPlayers(bench)
+          setOriginalBench(bench)
+          setReservePlayers(reserves ?? [])
+        }
+
         setLoading(false)
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [selectedTeam?.id])
+
+  // ── Apply incoming route state (formation / playstyle / competition) ──
+  useEffect(() => {
+    const s = location.state
+    if (!s) return
+    if (s.playstyle)   setPlaystyle(s.playstyle)
+    if (s.competition) setCompetition(s.competition)
+    if (s.formation)   setFormation(s.formation)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Fetch playstyle catalogue once on mount ───────────────────────────
   useEffect(() => {
@@ -127,7 +373,8 @@ export default function Match() {
   }, [playstyle, formation])
 
   // ── Live stamina — wired to minute slider ────────────────────────────
-  function calculateStamina(player, minute) {
+  // matchMinute drives ET amplification; minuteOnPitch is actual time played
+  function calculateStamina(player, minuteOnPitch, matchMinute = minuteOnPitch) {
     const pos = player.assigned_slot || player.api_position || 'CM'
     const DECAY = {
       GK:0.18, CB:0.28, LB:0.33, RB:0.33,
@@ -135,18 +382,28 @@ export default function Match() {
       LM:0.48, RM:0.48, LAM:0.50, CAM:0.50,
       RAM:0.50, LW:0.52, RW:0.52, ST:0.58, CF:0.55
     }
-    const base = DECAY[pos] || 0.43
+    const base  = DECAY[pos] || 0.43
     const fc26s = player.power_stamina || 65
-    const mod = 1.0 - ((fc26s - 50) / 200)
-    const wr = player.work_rate_att || 'Medium'
-    const wmod = {High:1.12, Medium:1.0, Low:0.85}[wr] || 1.0
-    return Math.max(0, Math.round((100 - base * mod * wmod * minute) * 10) / 10)
+    const mod   = 1.0 - ((fc26s - 50) / 200)
+    const wr    = player.work_rate_att || 'Medium'
+    const wmod  = {High:1.12, Medium:1.0, Low:0.85}[wr] || 1.0
+    // ET amplification: legs are burning in extra time
+    let etMult = 1.0
+    if (matchMinute > 90) {
+      const etMins = matchMinute - 90
+      etMult = etMins <= 15 ? 1.4 : 1.8
+    }
+    return Math.max(0, Math.round((100 - base * mod * wmod * minuteOnPitch * etMult) * 10) / 10)
   }
 
   const liveXI = useMemo(() =>
     pitchPlayers.map(p => ({
       ...p,
-      stamina_pct: calculateStamina(p, minute),
+      stamina_pct: calculateStamina(
+        p,
+        Math.max(0, minute - (p.minute_entered ?? 0)),
+        minute,
+      ),
     }))
   , [pitchPlayers, minute])
 
@@ -191,22 +448,53 @@ export default function Match() {
     setTimeout(() => setInvalidFlashIdx(null), 600)
   }
 
+  // ── Derived match phase constants ────────────────────────────────────
+  const inET    = compFormat.hasET && minute > 90 && minute <= 120
+  const pkMode  = compFormat.straightToPKs ? minute > 90 : (compFormat.hasET && minute > 120)
+  const maxSubs = inET ? 6 : 5
+
   // ── Swap helpers ──────────────────────────────────────────────────────
   function doBenchToPitch(benchIdx, pitchIdx, skipSubCount = false) {
-    if (!skipSubCount && subsUsed >= 5) {
-      showToast('⚠ Maximum 5 substitutions reached')
+    // CRITICAL: pre-kickoff drags never count against the sub allowance.
+    // matchStarted=true when arriving from Squad.jsx kick-off (already confirmed).
+    // matchStarted=false on direct navigation until user explicitly starts the match.
+    const effectiveSkip = skipSubCount || !matchStarted
+
+    if (!effectiveSkip && subsUsed >= maxSubs) {
+      showToast(
+        inET
+          ? '⚠ ET substitution already used'
+          : '⚠ Maximum 5 substitutions reached'
+      )
       return false
     }
     const np = [...pitchPlayers], nb = [...benchPlayers]
-    const bPlayer = { ...nb[benchIdx] }
+    const bPlayer = { ...nb[benchIdx], minute_entered: minute }  // FIX 1: track when sub came on
+
+    // FIX 4: reserve players cannot be subbed on during a match
+    if (reserveIds.has(bPlayer.id)) {
+      showToast('⚠ Reserve players cannot be subbed on during a match')
+      return false
+    }
     const pPlayer = { ...np[pitchIdx] }
+    const pitchSlot = pPlayer.assigned_slot || pPlayer.position || 'CM'
+    const compat    = getPositionCompatibility(bPlayer.api_position || bPlayer.position, pitchSlot)
+    if (compat === 'blocked') {
+      showToast('⚠ Invalid position swap')
+      return false
+    }
+    bPlayer.outOfPosition = compat === 'natural' ? false : compat
+
     np[pitchIdx] = bPlayer
     nb[benchIdx] = pPlayer
 
-    if (!skipSubCount) {
+    if (!effectiveSkip) {
       // Push undo snapshot before applying
       setSubHistory(prev => [...prev, { pitch: pitchPlayers, bench: benchPlayers, count: subsUsed }])
       setSubsUsed(c => c + 1)
+      if (pPlayer?.name) setAppliedSubNames(prev => new Set([...prev, pPlayer.name]))
+      // Track ET 6th-sub slot usage
+      if (inET && subsUsed === 5 && !etSubUsed) setEtSubUsed(true)
     }
     setPitchPlayers(np)
     setBenchPlayers(nb)
@@ -216,8 +504,25 @@ export default function Match() {
   }
 
   function doPitchToPitch(fromIdx, toIdx) {
-    const np = [...pitchPlayers]
-    ;[np[fromIdx], np[toIdx]] = [np[toIdx], np[fromIdx]]
+    const np      = [...pitchPlayers]
+    const playerA = np[fromIdx]
+    const playerB = np[toIdx]
+    const slotA   = playerA.assigned_slot || playerA.position || 'CM'
+    const slotB   = playerB.assigned_slot || playerB.position || 'CM'
+
+    const compatA = getPositionCompatibility(playerA.api_position || playerA.position, slotB)
+    const compatB = getPositionCompatibility(playerB.api_position || playerB.position, slotA)
+
+    if (compatA === 'blocked' || compatB === 'blocked') {
+      showToast('⚠ Invalid position — goalkeepers and attackers cannot play as defenders')
+      return
+    }
+    if (compatA === 'tactical' || compatB === 'tactical') {
+      showToast('⚠ Tactical gamble — unconventional move applied')
+    }
+
+    np[fromIdx] = { ...playerB, assigned_slot: slotA, outOfPosition: compatB }
+    np[toIdx]   = { ...playerA, assigned_slot: slotB, outOfPosition: compatA }
     setPitchPlayers(np)
     flashGreen(toIdx)
   }
@@ -232,6 +537,43 @@ export default function Match() {
     setBenchPlayers(nb)
     setManualSwaps(prev => new Set([...prev, pPlayer?.id]))
     flashGreen(pitchIdx)
+  }
+
+  function loadSavedSquad(squad) {
+    if (!squad?.xi?.length) return
+
+    const formation = squad.formation || '4-3-3'
+    const slotOrder = FORMATION_SLOT_ORDER[formation] || FORMATION_SLOT_ORDER['4-3-3']
+    const sorted    = sortXIByFormation(squad.xi, slotOrder)
+
+    // Deduplicate — each player appears exactly once
+    const seen    = new Set()
+    const deduped = sorted.filter(p => {
+      if (seen.has(p.id)) return false
+      seen.add(p.id)
+      return true
+    })
+    const remaining = squad.xi.filter(p => !seen.has(p.id))
+    const finalXI   = [...deduped, ...remaining].slice(0, 11)
+
+    const xiWithEntry = finalXI.map(p => ({
+      ...p,
+      minute_entered: 0,
+      outOfPosition: getPositionCompatibility(
+        p.api_position || p.position,
+        p.assigned_slot || p.position
+      ),
+    }))
+
+    setPitchPlayers(xiWithEntry)
+    setOriginalPitch(xiWithEntry)
+    setBenchPlayers(squad.bench ?? [])
+    setOriginalBench(squad.bench ?? [])
+    if (squad.formation)   setFormation(squad.formation)
+    if (squad.playstyle)   setPlaystyle(squad.playstyle)
+    if (squad.competition) setCompetition(squad.competition)
+    setMatchStarted(true)
+    setShowSavedSquadsPanel(false)
   }
 
   function doBenchToBench(fromIdx, toIdx) {
@@ -364,6 +706,9 @@ export default function Match() {
     const applied = doBenchToPitch(benchIdx, pitchIdx)
     if (!applied) return
 
+    // Track that this player has been subbed off so re-analyse excludes them
+    if (offName) setAppliedSubNames(prev => new Set([...prev, offName]))
+
     // Toast notification
     showToast(`${onName ?? 'Player'} replaces ${offName ?? 'Player'}`)
 
@@ -374,6 +719,23 @@ export default function Match() {
     // Remove this rec card, keep panel open, auto-reanalyse with new XI
     setRecs(prev => prev.filter(r => r !== rec))
     setShouldReanalyse(true)
+  }
+
+  // ── Apply positional swap (no sub counter) ────────────────────────────
+  function applySwap(rec) {
+    const { player_a, player_b } = rec
+    // Support both new (swap_to) and legacy (new_slot) field names
+    const aNewSlot = player_a.swap_to || player_a.new_slot
+    const bNewSlot = player_b.swap_to || player_b.new_slot
+    setPitchPlayers(prev => prev.map(p => {
+      if (p.name === player_a.name) return { ...p, assigned_slot: aNewSlot }
+      if (p.name === player_b.name) return { ...p, assigned_slot: bNewSlot }
+      return p
+    }))
+    const aLast = player_a.name.split(' ').pop()
+    const bLast = player_b.name.split(' ').pop()
+    showToast(`${aLast} ↔ ${bLast} swapped positions`)
+    setRecs(prev => prev.filter(r => r !== rec))
   }
 
   // ── Reserve → matchday bench ──────────────────────────────────────────
@@ -424,6 +786,9 @@ export default function Match() {
     setBenchPlayers(originalBench)
     setManualSwaps(new Set())
     setSubsUsed(0); setSubHistory([])
+    setAppliedSubNames(new Set())
+    setUrgencyMode(null)
+    setGroupedWindow(null)
     setHighOff(null); setHighOn(null)
     setSubArrow(null); setShowPanel(false)
     setFlashIdx(null); setRecs([])
@@ -440,18 +805,8 @@ export default function Match() {
     setRecLoading(true)
     setHighOff(null); setHighOn(null); setSubArrow(null)
 
-    const xiPayload = liveXI.map(p => ({
-      ...p, minutes_played: p.minutes_played || minute,
-    }))
-
     const homeScoreVal = isHome ? ourScore : opponentScore
     const awayScoreVal = isHome ? opponentScore : ourScore
-
-    console.log('[SubHub] Analyse payload:', {
-      xi:     xiPayload.map(p => ({ name: p.name, pos: p.assigned_slot ?? p.position, stamina: p.stamina_pct })),
-      bench:  liveBench.map(p => ({ name: p.name, pos: p.position })),
-      minute, score: `${homeScoreVal}-${awayScoreVal}`, intent, formation,
-    })
 
     let results = []
     let fullResponse = null
@@ -460,22 +815,28 @@ export default function Match() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          starting_xi:     xiPayload,
-          bench:           liveBench,
-          home_score:      homeScoreVal,
-          away_score:      awayScoreVal,
-          is_home:         isHome,
-          minute,
-          manager_intent:  intent,
-          playstyle,
+          // New canonical keys
+          on_pitch:           liveXI,
+          bench_available:    liveBench,
+          subbed_off:         [...appliedSubNames],
+          current_minute:     minute,
+          current_score_home: homeScoreVal,
+          current_score_away: awayScoreVal,
+          is_home:            isHome,
+          subs_remaining:     maxSubs - subsUsed,
           formation,
-          injured_players: injuredPlayers,
+          playstyle,
+          competition:        competition || selectedTeam?.leagueCode || 'PL',
+          pk_mode:            pkMode,
+          straight_to_pks:    compFormat.straightToPKs,
         }),
       })
       const data = await res.json()
       if (data.recommendations) {
-        results      = data.recommendations
+        results      = data.recommendations  // already contains subs + swaps + hold
         fullResponse = data
+        setUrgencyMode(data.urgency_mode ?? null)
+        setGroupedWindow(data.grouped_window ?? null)
       } else if (Array.isArray(data)) {
         results = data
       }
@@ -512,7 +873,7 @@ export default function Match() {
 
     setRecLoading(false)
     setShowPanel(true)
-  }, [liveXI, liveBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots])
+  }, [liveXI, liveBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots, appliedSubNames, subsUsed, competition, compFormat, maxSubs, pkMode])
 
   // ── Keep handleAnalyse ref fresh (must be after the useCallback above) ──
   useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
@@ -563,6 +924,75 @@ export default function Match() {
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
 
+          {/* Competition selector */}
+          <div className="comp-selector-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+            <button
+              onClick={() => setShowCompSelector(p => !p)}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--comp-primary, #c8963e)',
+                borderRadius: 4,
+                color: 'var(--comp-primary, #c8963e)',
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '3px 8px',
+                cursor: 'pointer',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+              }}
+            >
+              {competition || 'SET COMPETITION'}
+            </button>
+
+            {showCompSelector && (
+              <div style={{
+                position: 'absolute',
+                top: 28,
+                left: 0,
+                zIndex: 100,
+                background: '#1a1a1a',
+                border: '1px solid #444',
+                borderRadius: 6,
+                padding: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                minWidth: 200,
+                maxHeight: 320,
+                overflowY: 'auto',
+              }}>
+                {(() => {
+                  const uefaStatus   = UEFA_ELIGIBILITY[selectedTeam?.id]
+                  const uefaComps    = uefaStatus === 'UCL'  ? ['UCL', 'UEFA Super Cup']
+                                     : uefaStatus === 'UEL'  ? ['UEL', 'UEFA Super Cup']
+                                     : uefaStatus === 'UECL' ? ['UECL']
+                                     : []
+                  const domestic     = LEAGUE_COMPETITIONS[selectedTeam?.leagueCode]
+                                     ?? Object.values(LEAGUE_COMPETITIONS).flat()
+                  return [...uefaComps, ...domestic, 'Friendly']
+                })().map(comp => (
+                  <button
+                    key={comp}
+                    onClick={() => { setCompetition(comp); setShowCompSelector(false) }}
+                    style={{
+                      background: competition === comp ? 'var(--comp-primary, #c8963e)' : 'transparent',
+                      border: 'none',
+                      borderRadius: 3,
+                      color: competition === comp ? '#000' : '#ccc',
+                      fontSize: '11px',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontWeight: competition === comp ? 700 : 400,
+                    }}
+                  >
+                    {comp}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Scoreline — OUR TEAM vs OPPONENT */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Our side */}
@@ -599,12 +1029,22 @@ export default function Match() {
 
           {/* Minute */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'Rajdhani', fontWeight: 600, minWidth: 34 }}>
-              {minute >= 90 ? `90+${minute - 90}'` : `${minute}'`}
-            </span>
-            <input type="range" min={1} max={100} value={minute}
-              onChange={e => setMinute(Number(e.target.value))}
-              style={{ width: 90, accentColor: 'var(--green)', cursor: 'pointer' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'Rajdhani', fontWeight: 600, minWidth: 34 }}>
+                {getMinuteDisplay(minute)}
+              </span>
+              {(inET || pkMode) && (() => {
+                const ph = getMatchPhase(minute, compFormat.hasET)
+                return (
+                  <span style={{ fontSize: 7, fontFamily: 'Rajdhani', fontWeight: 800, letterSpacing: '0.08em', color: ph.color }}>
+                    {ph.label}
+                  </span>
+                )
+              })()}
+            </div>
+            <input type="range" min={1} max={sliderMax} value={minute}
+              onChange={e => { setMinute(Number(e.target.value)); if (!matchStarted) setMatchStarted(true) }}
+              style={{ width: 90, accentColor: inET ? 'var(--amber)' : pkMode ? '#ff3d3d' : 'var(--green)', cursor: 'pointer' }} />
           </div>
 
           {/* Intent */}
@@ -665,29 +1105,97 @@ export default function Match() {
           )}
 
           {/* Sub counter + undo */}
-          <div className="sub-counter-wrap">
-            <span className={`sub-counter${subsUsed >= 5 ? ' maxed' : subsUsed >= 3 ? ' warning' : ''}`}>
-              <span className="sub-counter-num">{subsUsed}</span>
-              <span className="sub-counter-sep">/</span>
-              <span className="sub-counter-max">5</span>
-              <span className="sub-counter-label">SUBS</span>
-            </span>
-            {subHistory.length > 0 && (
-              <button className="undo-btn" onClick={undoLastSub} title="Undo last substitution">
-                ↩ UNDO
-              </button>
-            )}
-          </div>
+          {!pkMode && (
+            <div className="sub-counter-wrap">
+              <span className={`sub-counter${subsUsed >= maxSubs ? ' maxed' : subsUsed >= 3 ? ' warning' : ''}`}>
+                <span className="sub-counter-num">{subsUsed}</span>
+                <span className="sub-counter-sep">/</span>
+                <span className="sub-counter-max">{maxSubs}</span>
+                <span className="sub-counter-label">{inET ? 'SUBS (ET)' : 'SUBS'}</span>
+              </span>
+              {subHistory.length > 0 && (
+                <button className="undo-btn" onClick={undoLastSub} title="Undo last substitution">
+                  ↩ UNDO
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* START MATCH — only shown when arriving without Squad.jsx kick-off state */}
+          {!matchStarted && (
+            <button
+              onClick={() => setMatchStarted(true)}
+              style={{
+                background: 'rgba(0,255,135,0.12)',
+                border: '1px solid rgba(0,255,135,0.4)',
+                borderRadius: 5, color: 'var(--green)',
+                fontSize: 10, fontFamily: 'Rajdhani', fontWeight: 700,
+                padding: '4px 12px', cursor: 'pointer',
+                letterSpacing: '0.08em', whiteSpace: 'nowrap',
+              }}
+              title="Lock lineup and start counting substitutions"
+            >
+              ⚽ START MATCH
+            </button>
+          )}
 
           {/* Analyse */}
           <button
             onClick={handleAnalyse}
             disabled={recLoading || loading}
-            className={`analyse-btn${recLoading || loading ? ' loading' : ''}`}
+            className={`analyse-btn${recLoading || loading ? ' loading' : ''}${pkMode ? ' pk-mode' : ''}`}
           >
-            {recLoading ? 'Analysing…' : '⚡ Analyse Subs'}
+            {recLoading ? 'Analysing…' : pkMode ? '⚡ PK SUBS' : '⚡ Analyse Subs'}
           </button>
         </div>
+
+        {/* Saved squads panel — shown when arriving without a confirmed XI */}
+        {showSavedSquadsPanel && savedSquads.length > 0 && (
+          <div style={{
+            flexShrink: 0, padding: '8px 14px',
+            borderBottom: '1px solid rgba(200,150,60,0.18)',
+            background: 'rgba(10,14,8,0.95)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 11, color: '#c8963e', letterSpacing: '0.12em' }}>
+                SAVED SQUADS
+              </span>
+              <button
+                onClick={() => setShowSavedSquadsPanel(false)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--muted)',
+                  fontSize: 11, fontFamily: 'Rajdhani', cursor: 'pointer', padding: '0 4px',
+                }}
+              >✕ dismiss</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+              {savedSquads.map(squad => (
+                <div
+                  key={squad.id}
+                  onClick={() => loadSavedSquad(squad)}
+                  style={{
+                    flexShrink: 0, border: '1px solid rgba(200,150,60,0.4)',
+                    borderRadius: 7, padding: '7px 12px', cursor: 'pointer',
+                    background: 'rgba(200,150,60,0.06)',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(200,150,60,0.14)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(200,150,60,0.06)'}
+                >
+                  <div style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 12, color: '#c8963e' }}>
+                    {squad.name}
+                  </div>
+                  <div style={{ fontFamily: 'Rajdhani', fontSize: 10, color: 'var(--muted)' }}>
+                    {squad.teamName} · {squad.formation}
+                  </div>
+                  <div style={{ fontFamily: 'Rajdhani', fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                    {squad.competition}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Game status bar */}
         <div className="game-status-bar">
@@ -695,7 +1203,7 @@ export default function Match() {
             {getGameStatusText(ourScore, opponentScore, minute)}
           </span>
           <span className="game-status-minute">
-            {minute >= 90 ? `90+${minute - 90}'` : `${minute}'`}
+            {getMinuteDisplay(minute)}
           </span>
         </div>
 
@@ -715,6 +1223,40 @@ export default function Match() {
                 {' '}· Win modifier: {Math.round((compatibility.win_probability_modifier - 1) * 100)}% active
               </span>
             </div>
+          </div>
+        )}
+
+        {/* PK banner */}
+        {pkMode && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 10, flexShrink: 0, padding: '6px 14px',
+            background: 'rgba(255,20,20,0.12)', borderBottom: '1px solid rgba(255,50,50,0.45)',
+            zIndex: 28,
+          }}>
+            <span style={{
+              fontFamily: 'Rajdhani', fontWeight: 900, fontSize: 13,
+              letterSpacing: '0.18em', color: '#ff3d3d',
+            }}>
+              ⚡ PENALTY SHOOTOUT — Analyse PK subs
+            </span>
+          </div>
+        )}
+
+        {/* ET indicator banner */}
+        {inET && !pkMode && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 10, flexShrink: 0, padding: '4px 14px',
+            background: 'rgba(255,184,0,0.08)', borderBottom: '1px solid rgba(255,184,0,0.25)',
+            zIndex: 28,
+          }}>
+            <span style={{
+              fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 11,
+              letterSpacing: '0.12em', color: 'var(--amber)',
+            }}>
+              {getMatchPhase(minute, compFormat.hasET).label} — 1 additional substitution available
+            </span>
           </div>
         )}
 
@@ -775,15 +1317,19 @@ export default function Match() {
                 labelColour="var(--card-gold-top)"
                 highlightId={highlightOn}
                 onSelect={p => setHighOn(prev => prev === p.id ? null : p.id)}
+                subbedOffNames={appliedSubNames}
                 collapsible
               />
-              {/* Squad / reserves — collapsible, hover "+" to promote */}
+              {/* Squad / reserves — collapsible, hover "+" to promote.
+                  FIX 4: when reserves came from Squad.jsx kick-off, dim the row
+                  (they cannot be subbed on — only promoted to matchday bench). */}
               {enrichedReserves.length > 0 && (
                 <BenchRow
                   bench={enrichedReserves}
                   label="SQUAD"
                   labelColour="var(--muted)"
-                  onAdd={addReserveToBench}
+                  onAdd={reserveIds.size > 0 ? undefined : addReserveToBench}
+                  opacity={reserveIds.size > 0 ? 0.5 : 1}
                   collapsible
                 />
               )}
@@ -794,9 +1340,12 @@ export default function Match() {
               <div style={{ position: 'absolute', top: 0, right: 0, height: '100%', width: 304, zIndex: 20 }}>
                 <RecommendPanel
                   recs={recs}
+                  urgencyMode={urgencyMode}
+                  groupedWindow={groupedWindow}
                   conflictWarning={conflictData}
                   onClose={() => { setShowPanel(false); setHighOff(null); setHighOn(null); setSubArrow(null) }}
                   onApply={applyRec}
+                  onApplySwap={applySwap}
                   onHoverRec={rec => {
                     if (!rec) {
                       // Restore to top rec highlights

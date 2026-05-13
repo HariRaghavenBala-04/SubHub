@@ -45,7 +45,7 @@ PLAYSTYLES: dict = {
         }
     },
 
-    "positional": {
+    "positional_play": {
         "label": "Positional Play",
         "icon": "🔷",
         "description": "Control space, dominate possession",

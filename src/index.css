@@ -187,6 +187,173 @@ h1, h2, h3, h4, h5, h6 {
   user-select: none;
 }
 
+/* ── FIFA-layout pitch card inner structure ──────────────────────────────── */
+
+/* Override default centred flex for pitch card — use column but left-align children */
+.player-card.pc-fifa {
+  align-items: stretch;
+  gap: 0;
+  padding: 5px 5px 4px 5px;
+  justify-content: space-between;
+  /* overflow stays hidden (inherited) — keeps shine clipped, hover panel is in card-wrapper */
+}
+
+/* TOP ROW: OVR+pos on left, surname fills remaining width */
+.pc-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.pc-top-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  min-width: 18px;
+}
+
+.pc-ovr {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--card-gold-top, #f0c060);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.pc-pos {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* Surname — takes remaining width, centred vertically in top section */
+.pc-surname-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 28px;
+  overflow: hidden;
+}
+
+.pc-surname-text {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 800;
+  color: var(--card-text, #f5e6c8);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  text-align: left;
+  display: block;
+}
+
+/* STATS */
+.pc-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  margin-top: 3px;
+}
+
+.pc-stats-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  gap: 0;
+}
+
+.pc-stats-divider {
+  width: 1px;
+  background: rgba(200,150,60,0.18);
+  flex-shrink: 0;
+  margin: 0 3px;
+}
+
+.pc-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: center;
+}
+
+.pc-stat-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 8.5px;
+  font-weight: 900;
+  color: var(--card-text, #f5e6c8);
+  line-height: 1;
+  text-align: center;
+}
+
+.pc-stat-lbl {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 6.5px;
+  font-weight: 700;
+  color: rgba(200,150,60,0.6);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ARCHETYPE ICON ROW */
+.pc-icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+/* HOVER PANEL — anchored to .card-wrapper so it escapes card's overflow:hidden */
+.pc-hover-panel {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%);
+  width: 84px;
+  background: rgba(8,10,12,0.97);
+  border: 1px solid rgba(200,150,60,0.35);
+  border-radius: 4px;
+  padding: 5px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 50;
+  white-space: nowrap;
+}
+
+.card-wrapper:hover .pc-hover-panel {
+  opacity: 1;
+}
+
+.pc-hover-archetype {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--card-gold-top, #f0c060);
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.pc-hover-stamina {
+  margin: 0;                 /* override any inherited margin */
+}
+
 /* Diagonal shine overlay */
 .player-card::before {
   content: '';
@@ -381,12 +548,11 @@ h1, h2, h3, h4, h5, h6 {
 
 .card-name-wrapper {
   width: 100%;
-  max-width: 64px;
-  overflow: hidden;
   height: 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow: hidden;
   margin-top: auto;
   z-index: 2;
 }
@@ -400,17 +566,12 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.3px;
   white-space: nowrap;
   display: block;
-  text-align: center;
-  width: 100%;
+  text-align: left;
 }
 
-@keyframes pingPongScroll {
-  0%   { transform: translateX(0); }
-  10%  { transform: translateX(0); }
-  45%  { transform: translateX(var(--scroll-px)); }
-  55%  { transform: translateX(var(--scroll-px)); }
-  90%  { transform: translateX(0); }
-  100% { transform: translateX(0); }
+@keyframes nameSlide {
+  0%,  20% { transform: translateX(0); }
+  80%, 100% { transform: translateX(calc(-1 * var(--slide-distance, 0px))); }
 }
 
 .card-stamina-bar {
@@ -574,14 +735,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .toggle-pill.active {
-  background: linear-gradient(
-    135deg,
-    rgba(200,150,60,0.2),
-    rgba(200,150,60,0.1)
-  );
-  border-color: var(--card-border-gold);
-  color: var(--card-gold-top);
-  box-shadow: 0 0 10px rgba(200,150,60,0.2);
+  background: var(--comp-pillActive, linear-gradient(135deg, rgba(200,150,60,0.2), rgba(200,150,60,0.1)));
+  border-color: var(--comp-pillBorder, var(--card-border-gold));
+  color: var(--comp-textAccent, var(--card-gold-top));
+  box-shadow: 0 0 10px var(--comp-cardGlow, rgba(200,150,60,0.2));
+  transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* ── Analyse Subs button ─────────────────────────────────────────────────── */
@@ -869,10 +1027,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .comp-pill.active {
-  background: linear-gradient(135deg, rgba(200,150,60,0.25), rgba(200,150,60,0.12));
-  border-color: #c8963c;
-  color: #f0c060;
-  box-shadow: 0 0 8px rgba(200,150,60,0.25);
+  background: var(--comp-pillActive, linear-gradient(135deg, rgba(200,150,60,0.25), rgba(200,150,60,0.12)));
+  border-color: var(--comp-pillBorder, #c8963c);
+  color: var(--comp-textAccent, #f0c060);
+  box-shadow: 0 0 8px var(--comp-cardGlow, rgba(200,150,60,0.25));
+  transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* Tab navigation */
@@ -906,8 +1065,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .planner-tab.active {
-  color: #f0c060;
-  border-bottom-color: #f0c060;
+  color: var(--comp-textAccent, #f0c060);
+  border-bottom-color: var(--comp-accent, #f0c060);
+  transition: color 0.4s ease, border-bottom-color 0.4s ease;
 }
 
 /* Tab content */
@@ -1064,9 +1224,10 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   font-size: 20px;
   font-weight: 800;
-  color: #f0c060;
+  color: var(--comp-textAccent, #f0c060);
   letter-spacing: 2px;
   margin: 0 0 4px 0;
+  transition: color 0.4s ease;
 }
 
 .readiness-title p {
@@ -1094,8 +1255,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .summary-pill.available {
   background: rgba(0,255,135,0.1);
-  border: 1px solid rgba(0,255,135,0.3);
-  color: #00ff87;
+  border: 1px solid var(--comp-accent, rgba(0,255,135,0.3));
+  color: var(--comp-accent, #00ff87);
+  transition: border-color 0.4s ease, color 0.4s ease;
 }
 
 .summary-pill.injured {
@@ -1131,10 +1293,12 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   font-weight: 700;
   letter-spacing: 3px;
-  color: rgba(255,255,255,0.2);
+  color: var(--comp-textAccent, rgba(255,255,255,0.4));
+  opacity: 0.55;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
   margin-bottom: 8px;
+  transition: color 0.4s ease;
 }
 
 .readiness-players {
@@ -1176,13 +1340,14 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 800;
   font-family: 'Rajdhani', sans-serif;
   color: #0d0d0d;
-  background: linear-gradient(135deg, #f0c060, #c8963c);
+  background: var(--comp-accent, linear-gradient(135deg, #f0c060, #c8963c));
   padding: 2px 5px;
   border-radius: 3px;
   min-width: 36px;
   text-align: center;
   letter-spacing: 0.5px;
   flex-shrink: 0;
+  transition: background 0.4s ease;
 }
 
 .rp-info {
@@ -1303,6 +1468,21 @@ h1, h2, h3, h4, h5, h6 {
   color: rgba(255,255,255,0.35);
   letter-spacing: 0.5px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.status-legend-bar span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.slb-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .status-legend {
@@ -1361,9 +1541,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .builder-load-btn {
-  background: linear-gradient(135deg, #c8963c, #f0c060);
+  background: var(--comp-accent, linear-gradient(135deg, #c8963c, #f0c060));
   border: none;
-  color: #0d0d0d;
+  color: #080c10;
   border-radius: 4px;
   padding: 6px 18px;
   font-size: 12px;
@@ -1381,8 +1561,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .builder-load-btn:not(:disabled):hover {
-  box-shadow: 0 0 16px rgba(200,150,60,0.4);
+  box-shadow: 0 0 16px var(--comp-cardGlow, rgba(200,150,60,0.4));
+  filter: brightness(1.1);
   transform: translateY(-1px);
+  transition: all 0.2s ease;
 }
 
 .builder-progress {
@@ -1396,7 +1578,8 @@ h1, h2, h3, h4, h5, h6 {
 .builder-progress-count {
   font-size: 22px;
   font-weight: 900;
-  color: #f0c060;
+  color: var(--comp-textAccent, #f0c060);
+  transition: color 0.4s ease;
 }
 
 .builder-progress-label {
@@ -1447,6 +1630,17 @@ h1, h2, h3, h4, h5, h6 {
     transparent 80px
   );
   pointer-events: none;
+  z-index: 0;
+}
+
+.builder-pitch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--comp-pitchTint, transparent);
+  pointer-events: none;
+  z-index: 1;
+  transition: background 0.4s ease;
 }
 
 /* Slots */
@@ -1457,16 +1651,17 @@ h1, h2, h3, h4, h5, h6 {
 .builder-empty-slot {
   width: 64px;
   height: 80px;
-  border: 1.5px dashed rgba(200,150,60,0.3);
+  border: 1.5px dashed var(--comp-pillBorder, rgba(200,150,60,0.3));
   border-radius: 6px;
-  background: rgba(200,150,60,0.04);
+  background: var(--comp-pillActive, rgba(200,150,60,0.04));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  transition: all 0.15s ease;
+  transition: all 0.15s ease, border-color 0.4s ease, background 0.4s ease;
   cursor: default;
+  opacity: 0.6;
 }
 
 .builder-slot:hover .builder-empty-slot,
@@ -1490,8 +1685,10 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 9px;
   font-weight: 800;
   font-family: 'Rajdhani', sans-serif;
-  color: rgba(200,150,60,0.5);
+  color: var(--comp-textAccent, rgba(200,150,60,0.5));
+  opacity: 0.7;
   letter-spacing: 0.5px;
+  transition: color 0.4s ease;
 }
 
 .bes-hint {
@@ -1504,10 +1701,10 @@ h1, h2, h3, h4, h5, h6 {
 .builder-filled-card {
   width: 64px;
   height: 80px;
-  background: linear-gradient(160deg, #1a1208, #0d0d0d);
-  border: 1.5px solid #c8963c;
+  background: var(--comp-cardBg, linear-gradient(160deg, #1a1208, #0d0d0d));
+  border: 1.5px solid var(--comp-cardBorder, #c8963c);
   border-radius: 6px;
-  box-shadow: 0 0 12px rgba(200,150,60,0.3);
+  box-shadow: 0 0 12px var(--comp-cardGlow, rgba(200,150,60,0.3));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1515,12 +1712,12 @@ h1, h2, h3, h4, h5, h6 {
   gap: 2px;
   cursor: grab;
   position: relative;
-  transition: all 0.15s ease;
+  transition: all 0.15s ease, border-color 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
 }
 
 .builder-filled-card:hover {
   transform: scale(1.06);
-  box-shadow: 0 0 20px rgba(200,150,60,0.5);
+  box-shadow: 0 0 20px var(--comp-cardGlow, rgba(200,150,60,0.5));
 }
 
 .builder-filled-card:hover .bfc-remove {
@@ -1531,19 +1728,21 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 8px;
   font-weight: 800;
   font-family: 'Rajdhani', sans-serif;
-  color: #0d0d0d;
-  background: linear-gradient(135deg, #f0c060, #c8963c);
+  color: #080c10;
+  background: var(--comp-accent, linear-gradient(135deg, #f0c060, #c8963c));
   padding: 1px 4px;
   border-radius: 2px;
   letter-spacing: 0.5px;
+  transition: background 0.4s ease;
 }
 
 .bfc-overall {
   font-size: 18px;
   font-weight: 900;
   font-family: 'Rajdhani', sans-serif;
-  color: #f0c060;
+  color: var(--comp-textAccent, #f0c060);
   line-height: 1;
+  transition: color 0.4s ease;
 }
 
 .bfc-name {
@@ -1636,9 +1835,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .bsl-filter-btn.active {
-  background: rgba(200,150,60,0.15);
-  border-color: rgba(200,150,60,0.4);
-  color: #f0c060;
+  background: var(--comp-pillActive, rgba(200,150,60,0.15));
+  border-color: var(--comp-pillBorder, rgba(200,150,60,0.4));
+  color: var(--comp-textAccent, #f0c060);
+  transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
 }
 
 .bsl-players {
@@ -1667,8 +1867,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .bsl-player-row:hover {
-  background: rgba(200,150,60,0.08);
-  border-color: rgba(200,150,60,0.2);
+  background: var(--comp-pillActive, rgba(200,150,60,0.08));
+  border-color: var(--comp-pillBorder, rgba(200,150,60,0.2));
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .bsl-player-row:active { cursor: grabbing; }
@@ -1677,13 +1878,14 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 8px;
   font-weight: 800;
   font-family: 'Rajdhani', sans-serif;
-  color: #0d0d0d;
-  background: linear-gradient(135deg, #f0c060, #c8963c);
+  color: #080c10;
+  background: var(--comp-accent, linear-gradient(135deg, #f0c060, #c8963c));
   padding: 1px 4px;
   border-radius: 2px;
   min-width: 32px;
   text-align: center;
   flex-shrink: 0;
+  transition: background 0.4s ease;
 }
 
 .bsl-name {
@@ -1703,4 +1905,533 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   color: rgba(200,150,60,0.7);
   flex-shrink: 0;
+}
+
+/* ── Competition Theme Engine ─────────────────────────────────────────────── */
+
+/* Vibe banner */
+.comp-vibe-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 20px;
+  background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.5px;
+  min-height: 28px;
+}
+
+.comp-vibe-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--comp-textAccent, #f0c060);
+  transition: color 0.4s ease;
+}
+
+.comp-vibe-dot {
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+}
+
+.comp-vibe-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+  letter-spacing: 0.3px;
+}
+
+/* UCL star particles */
+.ucl-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.ucl-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #aac4ff;
+  box-shadow: 0 0 4px rgba(170,196,255,0.8), 0 0 8px rgba(170,196,255,0.4);
+  animation: starTwinkle 2s ease-in-out infinite alternate;
+}
+
+@keyframes starTwinkle {
+  0%   { opacity: 0.15; transform: scale(0.8); }
+  50%  { opacity: 0.7;  transform: scale(1.2); }
+  100% { opacity: 0.25; transform: scale(1.0); }
+}
+
+/* Ensure pitch slots are above the tint overlay */
+.builder-slot {
+  z-index: 5;
+}
+
+/* ── Friendly (FRN) — FIFA 15 ghost silver overrides ─────────────────────── */
+
+.planner-page[data-comp="FRN"] .builder-filled-card {
+  background: var(--comp-cardBg);
+  border: 1.5px solid rgba(180,180,180,0.3);
+  box-shadow:
+    0 0 8px rgba(180,180,180,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.planner-page[data-comp="FRN"] .bfc-slot {
+  background: #5a5a5a;
+  color: #c0c0c0;
+}
+
+.planner-page[data-comp="FRN"] .bfc-overall {
+  color: #b0b0b0;
+}
+
+.planner-page[data-comp="FRN"] .builder-empty-slot {
+  border: 1.5px dashed rgba(180,180,180,0.2);
+  background: rgba(180,180,180,0.02);
+}
+
+.planner-page[data-comp="FRN"] .bsl-pos {
+  background: #5a5a5a;
+  color: #c0c0c0;
+}
+
+.planner-page[data-comp="FRN"] .comp-vibe-banner {
+  border-bottom-color: rgba(180,180,180,0.1);
+}
+
+.planner-page[data-comp="FRN"] .comp-vibe-label,
+.planner-page[data-comp="FRN"] .comp-vibe-text {
+  opacity: 0.5;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PLANNER SPRINT 4 — SUB DOCTRINE
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab wrapper ── */
+.tab-doctrine {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 900px;
+}
+
+/* ── Header ── */
+.doctrine-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.doctrine-title h2 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--comp-textAccent, #f0c060);
+  letter-spacing: 2px;
+  margin: 0 0 4px 0;
+  transition: color 0.4s ease;
+}
+
+.doctrine-title p {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.doctrine-title strong {
+  color: rgba(255,255,255,0.6);
+  font-weight: 700;
+}
+
+/* ── Slot cards stack ── */
+.doctrine-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doctrine-slot-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--comp-pillBorder, rgba(200,150,60,0.3));
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.4s ease;
+}
+
+/* Card header */
+.dsc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.dsc-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--comp-textAccent, #f0c060);
+  text-transform: uppercase;
+  transition: color 0.4s ease;
+}
+
+.dsc-minute-badge {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 1px 8px;
+}
+
+/* Controls grid */
+.dsc-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.dsc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dsc-field-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+}
+
+/* Slider */
+.dsc-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dsc-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.dsc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--comp-accent, #f0c060);
+  cursor: pointer;
+  transition: background 0.4s ease;
+  box-shadow: 0 0 6px var(--comp-cardGlow, rgba(200,150,60,0.5));
+}
+
+.dsc-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--comp-accent, #f0c060);
+  border: none;
+  cursor: pointer;
+  transition: background 0.4s ease;
+}
+
+.dsc-slider-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--comp-textAccent, #f0c060);
+  min-width: 28px;
+  text-align: right;
+  transition: color 0.4s ease;
+}
+
+/* Selects */
+.dsc-select {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: #f5e6c8;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.dsc-select:focus {
+  border-color: var(--comp-pillBorder, rgba(200,150,60,0.5));
+}
+
+.dsc-select option {
+  background: #0d0d0d;
+  color: #f5e6c8;
+}
+
+/* Sub off/on row */
+.dsc-swap-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.dsc-swap-field {
+  flex: 1;
+}
+
+.dsc-swap-arrow {
+  font-size: 18px;
+  color: var(--comp-textAccent, #f0c060);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: color 0.4s ease;
+}
+
+/* Analysis bar */
+.dsc-analysis {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  background: rgba(0,0,0,0.2);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-wrap: wrap;
+}
+
+.dsc-compat {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.dsc-compat.compat-ok {
+  color: #00ff87;
+  background: rgba(0,255,135,0.1);
+  border: 1px solid rgba(0,255,135,0.25);
+}
+
+.dsc-compat.compat-warn {
+  color: #ffb800;
+  background: rgba(255,184,0,0.1);
+  border: 1px solid rgba(255,184,0,0.25);
+}
+
+.dsc-compat.compat-bad {
+  color: #ff3d3d;
+  background: rgba(255,61,61,0.1);
+  border: 1px solid rgba(255,61,61,0.25);
+}
+
+.dsc-impact {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.3px;
+}
+
+.dsc-impact strong {
+  color: var(--comp-textAccent, #f0c060);
+  font-weight: 800;
+  transition: color 0.4s ease;
+}
+
+/* ── Scenario Preview ── */
+.doctrine-preview {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.doctrine-preview-header {
+  padding: 10px 16px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.scenario-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.scenario-col {
+  padding: 14px;
+  border-right: 1px solid rgba(255,255,255,0.05);
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scenario-col:last-child {
+  border-right: none;
+}
+
+.scenario-col-header {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.scenario-no-sub {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.18);
+  font-style: italic;
+  padding-top: 4px;
+}
+
+.scenario-sub-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sse-minute {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sse-players {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.sse-off {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+}
+
+.sse-arrow {
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+}
+
+.sse-on {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+}
+
+.sse-delta {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* ── Export button ── */
+.doctrine-export-btn {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--comp-pillBorder, rgba(200,150,60,0.4));
+  border-radius: 6px;
+  color: var(--comp-textAccent, #f0c060);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.doctrine-export-btn:hover {
+  background: var(--comp-pillActive, rgba(200,150,60,0.08));
+  box-shadow: 0 0 16px var(--comp-cardGlow, rgba(200,150,60,0.2));
+}
+
+/* ── Print-only content ── */
+.tactical-briefing-print {
+  display: none;
+}
+
+/* ── @media print ── */
+@media print {
+  /* Hide everything */
+  body > * {
+    display: none !important;
+  }
+
+  /* Show only the briefing */
+  .planner-page .tactical-briefing-print,
+  .planner-page .tactical-briefing-print * {
+    display: block !important;
+  }
+
+  .planner-page {
+    display: block !important;
+    background: #fff !important;
+  }
+
+  .tactical-briefing-print {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    padding: 32px 40px;
+    background: #fff;
+    z-index: 99999;
+  }
+
+  .tbp-content {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #000;
+    background: transparent;
+    white-space: pre-wrap;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
 }

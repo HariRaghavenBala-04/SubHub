@@ -25,6 +25,7 @@ export default function BenchRow({
   onSelect,
   onAdd,
   collapsible = false,
+  subbedOffNames = null,  // Set of player names that have been subbed off
 }) {
   const [expanded, setExpanded] = useState(!collapsible)
 
@@ -68,6 +69,7 @@ export default function BenchRow({
               onSelect={onSelect}
               interactive={!!onSelect}
               onAdd={onAdd}
+              subbedOff={subbedOffNames ? subbedOffNames.has(p?.name) : false}
             />
           ))}
         </div>
@@ -76,7 +78,7 @@ export default function BenchRow({
   )
 }
 
-function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd }) {
+function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd, subbedOff = false }) {
   const [hovered, setHovered] = useState(false)
 
   // Bench slots are droppable; reserve slots are also droppable (for bench/pitch→reserve drops)
@@ -86,15 +88,29 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd })
   return (
     <div
       ref={setNodeRef}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={subbedOff ? undefined : () => setHovered(true)}
+      onMouseLeave={subbedOff ? undefined : () => setHovered(false)}
       style={{
         position: 'relative', borderRadius: 8, flexShrink: 0,
-        border: isOver ? '1.5px dashed rgba(200,150,60,0.7)' : '1.5px solid transparent',
-        background: isOver ? 'rgba(200,150,60,0.07)' : 'transparent',
+        border: isOver && !subbedOff ? '1.5px dashed rgba(200,150,60,0.7)' : '1.5px solid transparent',
+        background: isOver && !subbedOff ? 'rgba(200,150,60,0.07)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
+        // FIX 5: dim subbed-off players
+        opacity:        subbedOff ? 0.4 : 1,
+        filter:         subbedOff ? 'grayscale(80%)' : 'none',
+        pointerEvents:  subbedOff ? 'none' : 'auto',
       }}
     >
+      {/* FIX 5: OFF badge */}
+      {subbedOff && (
+        <div style={{
+          position: 'absolute', top: 3, left: 3, zIndex: 10,
+          background: 'rgba(255,50,50,0.85)', borderRadius: 2,
+          fontSize: 7, fontFamily: 'Rajdhani', fontWeight: 800,
+          color: '#fff', padding: '1px 3px', letterSpacing: '0.06em',
+          pointerEvents: 'none',
+        }}>OFF</div>
+      )}
       {player ? (
         onAdd ? (
           // Reserve: draggable out (from="reserve") + "+" promote button on hover
@@ -123,6 +139,9 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd })
               >+</button>
             )}
           </>
+        ) : subbedOff ? (
+          // Subbed-off: static display only, no drag/hover interaction
+          <PlayerCard player={player} size="small" />
         ) : interactive ? (
           <DraggableCard
             player={player}

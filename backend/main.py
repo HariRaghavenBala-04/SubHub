@@ -323,28 +323,39 @@ async def player_profile(name: str, position: str = "CM"):
 @app.post("/api/recommend")
 async def recommend(request: Request):
     body = await request.json()
-    print(f"=== RECOMMEND REQUEST ===")
-    print(f"minute: {body.get('minute')}")
-    print(f"home_score: {body.get('home_score')}")
-    print(f"away_score: {body.get('away_score')}")
-    print(f"is_home: {body.get('is_home')}")
-    print(f"manager_intent: {body.get('manager_intent')}")
-    print(f"playstyle: {body.get('playstyle')}")
-    print(f"formation: {body.get('formation')}")
-    print(f"XI players: {[p.get('name') for p in body.get('starting_xi', [])]}")
-    print(f"Bench players: {[p.get('name') for p in body.get('bench', [])]}")
-    print(f"========================")
+
+    # Support both new (on_pitch / bench_available) and legacy (starting_xi / bench) keys
+    on_pitch      = body.get("on_pitch")      or body.get("starting_xi", [])
+    bench_avail   = body.get("bench_available") or body.get("bench", [])
+    subbed_off    = body.get("subbed_off")    or body.get("applied_subs", [])
+    cur_minute    = body.get("current_minute") or body.get("minute", 60)
+    score_home    = body.get("current_score_home") if body.get("current_score_home") is not None \
+                    else body.get("home_score", 0)
+    score_away    = body.get("current_score_away") if body.get("current_score_away") is not None \
+                    else body.get("away_score", 0)
+    subs_rem        = body.get("subs_remaining", 5)
+    competition     = body.get("competition", "")
+    pk_mode         = body.get("pk_mode", False)
+    straight_to_pks = body.get("straight_to_pks", False)
+
+    print(f"[Rec] {cur_minute}' | {score_home}-{score_away} | "
+          f"playstyle={body.get('playstyle')} formation={body.get('formation')} "
+          f"subs_left={subs_rem} subbed_off={subbed_off}")
+
     return get_recommendations(
-        starting_xi     = body.get("starting_xi", []),
-        bench           = body.get("bench", []),
-        home_score      = body.get("home_score", 0),
-        away_score      = body.get("away_score", 0),
-        is_home         = body.get("is_home", True),
-        minute          = body.get("minute", 60),
-        manager_intent  = body.get("manager_intent", "tactical_change"),
-        playstyle       = body.get("playstyle", "high_press"),
-        formation       = body.get("formation", "4-3-3"),
-        injured_players = body.get("injured_players", []),
+        on_pitch            = on_pitch,
+        bench_available     = bench_avail,
+        subbed_off          = subbed_off,
+        current_minute      = int(cur_minute),
+        current_score_home  = int(score_home),
+        current_score_away  = int(score_away),
+        is_home             = body.get("is_home", True),
+        subs_remaining      = int(subs_rem),
+        formation           = body.get("formation", "4-3-3"),
+        playstyle           = body.get("playstyle", "high_press"),
+        competition         = competition,
+        pk_mode             = pk_mode,
+        straight_to_pks     = straight_to_pks,
     )
 
 
