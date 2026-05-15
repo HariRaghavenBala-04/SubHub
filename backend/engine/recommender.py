@@ -106,6 +106,79 @@ PLAYSTYLE_FIT_WEIGHTS: dict[str, list[tuple[str, float]]] = {
     "structured_press": [("physic", 0.30), ("passing", 0.30), ("defending", 0.25), ("power_stamina", 0.15)],
 }
 
+# ── Scenario intensity → display attributes ───────────────────────────────────
+# Keys prefixed with "~" are derived composites computed by _compute_derived().
+# All other keys are direct FC26 CSV column reads via _attr().
+
+INTENSITY_ATTRS: dict[str, list[str]] = {
+    "attacking":   ["~explosive_movement",  "attacking_finishing"],
+    "defensive":   ["defending_marking_awareness", "~metabolic_power"],
+    "press_reset": ["~metabolic_power",     "movement_sprint_speed"],
+}
+
+ATTR_LABELS: dict[str, str] = {
+    "~explosive_movement":         "Explosive Movement",
+    "attacking_finishing":         "Finishing",
+    "defending_marking_awareness": "Defensive Awareness",
+    "~metabolic_power":            "Metabolic Power",
+    "movement_sprint_speed":       "Sprint Speed",
+}
+
+# ── Derived attribute formulas ────────────────────────────────────────────────
+# Each formula takes the player dict and returns a float.
+# All inputs are raw FC26 CSV columns, read via _attr() (defaults to 65 if missing).
+
+_DERIVED_FORMULAS: dict[str, object] = {
+    # How well a player can move explosively — granular composite of acceleration,
+    # sprint speed, and agility rather than the single FC26 "pace" category.
+    "~explosive_movement": lambda p, a: (
+        a(p, "movement_acceleration") * 0.5 +
+        a(p, "movement_sprint_speed")  * 0.3 +
+        a(p, "movement_agility")       * 0.2
+    ),
+    # Sustained high-intensity output: stamina × aggression × sprint speed.
+    "~metabolic_power": lambda p, a: (
+        a(p, "power_stamina")          * 0.4 +
+        a(p, "mentality_aggression")   * 0.3 +
+        a(p, "movement_sprint_speed")  * 0.3
+    ),
+    # Press output capacity: how reliably a player disrupts the opponent's build-up.
+    "~pressing_reliability": lambda p, a: (
+        a(p, "mentality_aggression")          * 0.35 +
+        a(p, "power_stamina")                 * 0.35 +
+        a(p, "defending_marking_awareness")   * 0.30
+    ),
+    # Defensive recovery: ability to track runners and recover shape.
+    "~tracking_back": lambda p, a: (
+        a(p, "defending_marking_awareness")   * 0.4 +
+        a(p, "power_stamina")                 * 0.3 +
+        a(p, "mentality_positioning")         * 0.3
+    ),
+}
+
+# ── Opponent playstyle attribute boosts ───────────────────────────────────────
+# Additive bonus on cand_score: (attr - 65) * weight summed across attrs.
+# Neutral point is 65 so only above-average attributes yield a positive delta.
+
+OPPONENT_PLAYSTYLE_BOOSTS: dict[str, list[tuple[str, float]]] = {
+    "high_line_press":     [("movement_acceleration",  0.30),
+                            ("movement_sprint_speed",   0.30),
+                            ("mentality_composure",     0.20)],
+    "deep_block":          [("mentality_vision",        0.30),
+                            ("skill_long_passing",      0.30),
+                            ("power_shot_power",        0.20)],
+    "elite_wingers":       [("mentality_positioning",   0.30),
+                            ("power_stamina",           0.25),
+                            ("defending_marking_awareness", 0.25)],
+    "counter_attack":      [("defending_marking_awareness", 0.30),
+                            ("mentality_aggression",    0.25),
+                            ("mentality_interceptions", 0.25)],
+    "physical_dominance":  [("power_strength",          0.30),
+                            ("power_jumping",            0.25),
+                            ("attacking_heading_accuracy", 0.25)],
+}
+
+
 # ── Delta thresholds by urgency mode ──────────────────────────────────────────
 
 DELTA_THRESHOLDS: dict[str, float] = {
@@ -198,6 +271,17 @@ def _attr(player: dict, key: str) -> float:
         return 65.0
 
 
+def _compute_derived(player: dict, key: str) -> float:
+    """Return a scenario display value for key.
+    Keys starting with '~' are computed from DERIVED_FORMULAS; all others
+    fall through to _attr() for a direct CSV column read."""
+    if key.startswith("~"):
+        formula = _DERIVED_FORMULAS.get(key)
+        if formula:
+            return formula(player, _attr)
+    return _attr(player, key)
+
+
 def _get_slot(player: dict) -> str:
     """Resolve a player's current pitch slot."""
     return (
@@ -238,6 +322,15 @@ def _playstyle_fit_score(player: dict, playstyle: str) -> float:
     weights = PLAYSTYLE_FIT_WEIGHTS.get(playstyle, [("physic", 0.5), ("passing", 0.5)])
     total   = sum(_attr(player, a) * w for a, w in weights)
     return round(min(100.0, total), 1)
+
+
+def _opponent_playstyle_bonus(player: dict, opponent_playstyle: str | None) -> float:
+    """Additive score bonus based on how well a player counters the opponent's style.
+    Uses (attr - 65) * weight so only above-average attributes yield a positive delta."""
+    if not opponent_playstyle:
+        return 0.0
+    boosts = OPPONENT_PLAYSTYLE_BOOSTS.get(opponent_playstyle, [])
+    return sum((_attr(player, k) - 65.0) * w for k, w in boosts)
 
 
 def _urgency_fit(position: str, urgency_mode: str) -> float:
@@ -479,6 +572,7 @@ def _generate_pk_recommendations(
     bench_available: list,
     playstyle:       str,
     subs_remaining:  int = 5,
+    subbed_off:      list | None = None,
 ) -> list:
     """
     Penalty-shootout substitution intelligence.
@@ -487,6 +581,17 @@ def _generate_pk_recommendations(
     3. Fall back to bench_alert when no swap clears the threshold.
     """
     recommendations: list[dict] = []
+
+    # Same hard guard as normal path — exclude already-subbed and on-pitch players.
+    subbed_off_set  = {str(s).lower() for s in (subbed_off or [])}
+    _on_pitch_names = {(p.get("name") or "").lower() for p in on_pitch}
+    _on_pitch_ids   = {str(p["id"]) for p in on_pitch if p.get("id") is not None}
+    bench_available = [
+        bp for bp in bench_available
+        if (bp.get("name") or "").lower() not in subbed_off_set
+        and (bp.get("name") or "").lower() not in _on_pitch_names
+        and (bp.get("id") is None or str(bp.get("id")) not in _on_pitch_ids)
+    ]
 
     # ── GK PK-save score ─────────────────────────────────────────────────
     def gk_pk_score(gk: dict) -> float:
@@ -703,6 +808,10 @@ def get_recommendations(
     manager_intent:      str         = "",
     injured_players:     list | None = None,
     applied_subs:        list | None = None,
+    intensity:           str         = "",
+    opponent_playstyle:  str | None  = None,
+    plan_scenario:       dict | None = None,
+    plan_formation:      str | None  = None,
     **_,
 ) -> dict:
     """
@@ -732,6 +841,7 @@ def get_recommendations(
             bench_available = bench_available or [],
             playstyle       = playstyle,
             subs_remaining  = subs_remaining,
+            subbed_off      = subbed_off or applied_subs or [],
         )
         ps_compat = get_compatibility(playstyle, formation)
         return {
@@ -752,8 +862,21 @@ def get_recommendations(
     team_score = current_score_home if is_home else current_score_away
     opp_score  = current_score_away if is_home else current_score_home
 
+    # Plan scenario blending — prior weight before 65' only.
+    # 30% plan intent + 70% live score so early-game urgency honours the
+    # manager's pre-match read without overriding what's actually happening.
+    _urgency_team = team_score
+    _urgency_opp  = opp_score
+    if plan_scenario and current_minute < 65:
+        plan_gs   = plan_scenario.get("game_state") or {}
+        plan_diff = float(plan_gs.get("score_diff", 0))
+        live_diff = float(team_score - opp_score)
+        # Keep as float — preserves fractional signal for _compute_urgency's
+        # goal_diff < 0 / <= -2 comparisons without distorting by rounding.
+        _urgency_team = opp_score + plan_diff * 0.3 + live_diff * 0.7
+
     if subs_remaining <= 0:
-        urgency = _compute_urgency(team_score, opp_score, current_minute)
+        urgency = _compute_urgency(_urgency_team, _urgency_opp, current_minute)
         return {
             "urgency_mode":    urgency,
             "recommendations": [{
@@ -770,7 +893,7 @@ def get_recommendations(
         }
 
     # ── STEP 2: Urgency mode + delta threshold ────────────────────────────
-    urgency_mode = _compute_urgency(team_score, opp_score, current_minute)
+    urgency_mode = _compute_urgency(_urgency_team, _urgency_opp, current_minute)
 
     goal_diff      = team_score - opp_score
     mins_remaining = 90 - current_minute
@@ -873,10 +996,26 @@ def get_recommendations(
             "_slot":            slot,
         })
 
-    # ── STEP 5: Eligible bench ────────────────────────────────────────────
+    # ── STEP 5: Eligible bench — hard duplicate guards ────────────────────
+    # Build forbidden sets directly from payload facts.
+    # No urgency mode or scoring logic can override these — they are absolute.
+    #
+    # forbidden_on:  players currently on the pitch (cannot sub ON someone playing)
+    # forbidden_off: players in subbed_off (cannot reuse an already-substituted player)
+    #
+    # Both name and ID are checked for on-pitch players because IDs are stable
+    # across payload serialisation while names may vary by encoding.
+    _on_pitch_names = {(p.get("name") or "").lower() for p in on_pitch}
+    _on_pitch_ids   = {str(p["id"]) for p in on_pitch if p.get("id") is not None}
+
     eligible_bench = [
         bp for bp in bench_available
-        if (bp.get("name") or "").lower() not in subbed_off_set
+        if (bp.get("name") or "").lower() not in subbed_off_set        # already subbed off
+        and (bp.get("name") or "").lower() not in _on_pitch_names      # already on pitch
+        and (                                                            # ID guard
+            bp.get("id") is None
+            or str(bp.get("id")) not in _on_pitch_ids
+        )
     ]
 
     # ── STEP 6 + 7: Find best sub per starter ─────────────────────────────
@@ -951,7 +1090,7 @@ def get_recommendations(
 
             base       = _base_positional_score(bp, slot, playstyle)
             urg_fit    = _urgency_fit(bp_pos, urgency_mode)
-            cand_score = base * compat * urg_fit
+            cand_score = base * compat * urg_fit + _opponent_playstyle_bonus(bp, opponent_playstyle)
 
             if cand_score > best_score:
                 best_score     = cand_score
@@ -1055,6 +1194,10 @@ def get_recommendations(
                 "key_upgrade":     f"{delta:+.1f} effective rating at {slot}",
                 "impact_score":    float(bp.get("overall", 70)) * 0.85,
                 "fc26_found":      bool(bp.get("pace") or bp.get("goalkeeping_diving")),
+                "scenario_attrs": [
+                    {"label": ATTR_LABELS[k], "value": int(round(_compute_derived(bp, k)))}
+                    for k in INTENSITY_ATTRS.get(intensity, [])
+                ],
             },
             "confidence":       confidence,
             "below_threshold":  below_threshold,
@@ -1172,6 +1315,14 @@ def get_recommendations(
                 f"{msg} Hold and reassess."
             ),
         })
+
+    # ── Plan formation note (informational only — no scoring change) ─────────
+    if plan_formation and plan_formation != formation:
+        first_sub = next((r for r in recommendations if r["type"] == "substitution"), None)
+        if first_sub:
+            first_sub["reasoning"] += (
+                f" Formation differs from pre-match plan ({plan_formation} → {formation})."
+            )
 
     # ── STEP 10: Assemble response ─────────────────────────────────────────
     ps_compat = get_compatibility(playstyle, formation)

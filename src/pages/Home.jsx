@@ -34,7 +34,7 @@ export default function Home() {
             marginBottom: 8,
           }}
         >
-          SubHub <span style={{ color: 'var(--green)' }}>⚽</span>
+          SubHub
         </h1>
         <p style={{ color: 'var(--muted)', fontSize: 16 }}>
           Football Substitution Intelligence Engine
@@ -83,7 +83,6 @@ export default function Home() {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)' }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
             >
-              <span style={{ fontSize: 42 }}>{l.flag}</span>
               <span
                 style={{
                   fontFamily: 'Rajdhani, sans-serif',

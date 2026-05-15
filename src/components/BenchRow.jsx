@@ -25,7 +25,9 @@ export default function BenchRow({
   onSelect,
   onAdd,
   collapsible = false,
-  subbedOffNames = null,  // Set of player names that have been subbed off
+  subbedOffNames = null,
+  keyPlayerNames = null,
+  keyPlayerTooltip = 'Key player for this match',
 }) {
   const [expanded, setExpanded] = useState(!collapsible)
 
@@ -70,6 +72,8 @@ export default function BenchRow({
               interactive={!!onSelect}
               onAdd={onAdd}
               subbedOff={subbedOffNames ? subbedOffNames.has(p?.name) : false}
+              isKeyPlayer={keyPlayerNames ? keyPlayerNames.has(p?.name) : false}
+              keyPlayerTooltip={keyPlayerTooltip}
             />
           ))}
         </div>
@@ -78,7 +82,7 @@ export default function BenchRow({
   )
 }
 
-function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd, subbedOff = false }) {
+function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd, subbedOff = false, isKeyPlayer = false, keyPlayerTooltip = '' }) {
   const [hovered, setHovered] = useState(false)
 
   // Bench slots are droppable; reserve slots are also droppable (for bench/pitch→reserve drops)
@@ -90,6 +94,7 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd, s
       ref={setNodeRef}
       onMouseEnter={subbedOff ? undefined : () => setHovered(true)}
       onMouseLeave={subbedOff ? undefined : () => setHovered(false)}
+      title={isKeyPlayer && !subbedOff ? keyPlayerTooltip : undefined}
       style={{
         position: 'relative', borderRadius: 8, flexShrink: 0,
         border: isOver && !subbedOff ? '1.5px dashed rgba(200,150,60,0.7)' : '1.5px solid transparent',
@@ -99,8 +104,17 @@ function BenchSlot({ index, player, highlightId, onSelect, interactive, onAdd, s
         opacity:        subbedOff ? 0.4 : 1,
         filter:         subbedOff ? 'grayscale(80%)' : 'none',
         pointerEvents:  subbedOff ? 'none' : 'auto',
+        ...(isKeyPlayer && !subbedOff ? { borderTop: '2px solid rgba(255,184,0,0.7)', borderRadius: 8 } : {}),
       }}
     >
+      {/* Key player gold star badge */}
+      {isKeyPlayer && !subbedOff && (
+        <div style={{
+          position: 'absolute', top: 2, right: 3, zIndex: 10,
+          fontSize: 8, color: 'rgba(255,184,0,0.85)',
+          pointerEvents: 'none', lineHeight: 1,
+        }}>★</div>
+      )}
       {/* FIX 5: OFF badge */}
       {subbedOff && (
         <div style={{

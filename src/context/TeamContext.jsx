@@ -22,6 +22,7 @@ export function TeamProvider({ children }) {
     const res = await fetch(`/api/squad/${teamId}?league_code=${leagueCode}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
+    console.log('FIRST PLAYER FROM API:', data.starting_xi?.[0]?.pace, data.starting_xi?.[0]?.shooting)
     return {
       ...data,
       xi:       data.starting_xi ?? [],

@@ -4,10 +4,10 @@
  * Unauthorised copying, distribution, or use is strictly prohibited.
  * See LICENSE file for full terms.
  */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTeam } from '../context/TeamContext'
-import { getSavedSquads, saveSquad, deleteSquad } from '../utils/squadStorage'
+import { getSavedSquads, saveSquad, deleteSquad, updateSquad } from '../utils/squadStorage'
 import { UEFA_ELIGIBILITY } from '../utils/uefaEligibility'
 
 // ── Country mapping ────────────────────────────────────────────────────────
@@ -109,6 +109,17 @@ const UEFA_COMPS = {
 }
 
 const FRIENDLY = { code: 'FRN', name: 'Friendly' }
+
+// Maps planner comp codes → /api/teams-by-competition keys.
+// Cups in the same country reuse the domestic league's team pool.
+const COMP_TO_API_KEY = {
+  PL: 'premier_league', FAC: 'premier_league', CC: 'premier_league', FCS: 'premier_league',
+  BL: 'bundesliga',     DFB: 'bundesliga',     SPK: 'bundesliga',
+  LL: 'la_liga',        CDR: 'la_liga',        SSP: 'la_liga',
+  L1: 'ligue_1',        CDF: 'ligue_1',        TSC: 'ligue_1',
+  SA: 'serie_a',        CPI: 'serie_a',        SCI: 'serie_a',
+  UCL: 'ucl', UEL: 'uel',
+}
 
 // ── Competition Theme Engine ───────────────────────────────────────────────
 
@@ -293,30 +304,259 @@ const BUILDER_SLOTS = {
     { key: 'RM_0',  slot: 'RM',  left: '93%', top: '51%' },
     { key: 'ST_0',  slot: 'ST',  left: '50%', top: '22%' },
   ],
+  '4-2-3-1 Wide': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LDM_0',  slot: 'LDM',  left: '35%', top: '55%' },
+    { key: 'RDM_0',  slot: 'RDM',  left: '65%', top: '55%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '30%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '32%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '30%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-2-3-1 Narrow': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LDM_0',  slot: 'LDM',  left: '35%', top: '55%' },
+    { key: 'RDM_0',  slot: 'RDM',  left: '65%', top: '55%' },
+    { key: 'LCAM_0', slot: 'LCAM', left: '30%', top: '32%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '35%' },
+    { key: 'RCAM_0', slot: 'RCAM', left: '70%', top: '32%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-1-2-1-2 Wide': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '58%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '42%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '42%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-1-2-1-2 Narrow': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '58%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '32%', top: '45%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '68%', top: '45%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-4-1-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '45%' },
+    { key: 'CF_0',   slot: 'CF',   left: '50%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-2-2-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCDM_0', slot: 'LCDM', left: '35%', top: '55%' },
+    { key: 'RCDM_0', slot: 'RCDM', left: '65%', top: '55%' },
+    { key: 'LCAM_0', slot: 'LCAM', left: '30%', top: '30%' },
+    { key: 'RCAM_0', slot: 'RCAM', left: '70%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-3-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '30%', top: '50%' },
+    { key: 'CM_0',   slot: 'CM',   left: '50%', top: '54%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '70%', top: '50%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '32%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-3-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '30%', top: '50%' },
+    { key: 'CM_0',   slot: 'CM',   left: '50%', top: '54%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '70%', top: '50%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '28%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '3-4-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '45%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '28%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '3-4-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '45%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '25%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '25%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '10%' },
+  ],
+  '3-1-4-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '60%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '40%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '35%', top: '42%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '65%', top: '42%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '40%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '3-4-3': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '48%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '50%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '50%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '48%' },
+    { key: 'LW_0',   slot: 'LW',   left: '20%', top: '18%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+    { key: 'RW_0',   slot: 'RW',   left: '80%', top: '18%' },
+  ],
+  '5-2-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '5-2-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '25%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '25%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '10%' },
+  ],
+  '5-4-1 Flat': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '42%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '45%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '45%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '42%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '15%' },
+  ],
+  '5-4-1 Diamond': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '55%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '40%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '40%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
 }
 
 // ── Position compatibility ─────────────────────────────────────────────────
 
-function isCompatibleForSlot(player, slotType) {
+function isCompatibleForSlot(player, slotType, formation) {
   const pos = player.api_position || player.position || 'CM'
+  // In 3-back formations the wide mid slots are wing-back roles, not winger roles
+  if ((slotType === 'LM' || slotType === 'RM') &&
+      ([
+        '3-5-2','3-4-1-2','3-4-2-1','3-1-4-2','3-4-3',
+        '5-3-2','5-2-1-2','5-2-2-1','5-4-1 Flat','5-4-1 Diamond'
+      ].includes(formation)) &&
+      ['LB', 'RB', 'LWB', 'RWB'].includes(pos)) return true
   const COMPAT = {
     GK:  ['GK'],
-    LB:  ['LB', 'LWB', 'CB', 'RB'],
-    RB:  ['RB', 'RWB', 'CB', 'LB'],
+    LB:  ['LB', 'LWB', 'CB', 'RB', 'RWB'],
+    RB:  ['RB', 'RWB', 'CB', 'LB', 'LWB'],
     CB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
-    LWB: ['LWB', 'LB', 'LM', 'RWB'],
-    RWB: ['RWB', 'RB', 'RM', 'LWB'],
+    LWB: ['LWB', 'LB', 'RB', 'LM', 'CM', 'CDM', 'RWB'],
+    RWB: ['RWB', 'RB', 'LB', 'RM', 'CM', 'CDM', 'LWB'],
     CDM: ['CDM', 'CM', 'CB', 'CAM'],
     CM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
-    LM:  ['LM', 'LW', 'CM', 'LWB', 'RM'],
-    RM:  ['RM', 'RW', 'CM', 'RWB', 'LM'],
+    LM:  ['LM', 'LW', 'CM', 'CDM', 'LWB', 'RM'],
+    RM:  ['RM', 'RW', 'CM', 'CDM', 'RWB', 'LM'],
     CAM: ['CAM', 'CM', 'LW', 'RW', 'CDM', 'ST', 'CF'],
     LAM: ['LAM', 'CAM', 'LW', 'CM'],
     RAM: ['RAM', 'CAM', 'RW', 'CM'],
     LW:  ['LW', 'LM', 'CAM', 'ST', 'RW'],
     RW:  ['RW', 'RM', 'CAM', 'ST', 'LW'],
     ST:  ['ST', 'CF', 'LW', 'RW', 'CAM'],
-    CF:  ['CF', 'ST', 'CAM', 'LW', 'RW'],
+    CF:   ['CF', 'ST', 'CAM', 'LW', 'RW'],
+    LCB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
+    RCB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
+    LCM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
+    RCM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
+    LDM:  ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    RDM:  ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    LCAM: ['CAM', 'CM', 'CDM', 'LM', 'RM', 'LW', 'RW'],
+    RCAM: ['CAM', 'CM', 'CDM', 'LM', 'RM', 'LW', 'RW'],
+    LCDM: ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    RCDM: ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    LCF:  ['CF', 'ST', 'CAM', 'LW', 'RW', 'SS'],
+    RCF:  ['CF', 'ST', 'CAM', 'LW', 'RW', 'SS'],
+    LST:  ['ST', 'CF', 'LW', 'RW', 'CAM', 'SS'],
+    RST:  ['ST', 'CF', 'LW', 'RW', 'CAM', 'SS'],
   }
   if (slotType === 'GK') return pos === 'GK'
   if (pos === 'GK') return slotType === 'GK'
@@ -324,49 +564,7 @@ function isCompatibleForSlot(player, slotType) {
   return allowed.includes(pos)
 }
 
-// ── Sub Doctrine helpers ───────────────────────────────────────────────────
-
-const SCENARIOS = {
-  winning2: 'Winning by 2+',
-  winning1: 'Winning by 1',
-  drawing:  'Drawing',
-  losing1:  'Losing by 1',
-  losing2:  'Losing by 2+',
-}
-
-const SCENARIO_TO_COL = {
-  winning2: 'winning',
-  winning1: 'winning',
-  drawing:  'drawing',
-  losing1:  'losing',
-  losing2:  'losing',
-}
-
-const DOC_POS_GROUP = {
-  GK: 'GK',
-  CB: 'DEF', LB: 'DEF', RB: 'DEF', LWB: 'DEF', RWB: 'DEF',
-  CDM: 'MID', CM: 'MID', LM: 'MID', RM: 'MID',
-  CAM: 'MID', LAM: 'MID', RAM: 'MID',
-  LW: 'ATT', RW: 'ATT', ST: 'ATT', CF: 'ATT', SS: 'ATT',
-}
-
-function getCompatibility(offPlayer, onPlayer) {
-  if (!offPlayer || !onPlayer) return null
-  const offPos = offPlayer.assigned_slot || offPlayer.api_position || 'CM'
-  const onPos  = onPlayer.api_position  || onPlayer.position       || 'CM'
-  const og = DOC_POS_GROUP[offPos] || 'MID'
-  const ig = DOC_POS_GROUP[onPos]  || 'MID'
-  if (og === 'GK' || ig === 'GK')
-    return og === ig
-      ? { symbol: '✓', label: 'Direct match', cls: 'compat-ok' }
-      : { symbol: '❌', label: 'Invalid', cls: 'compat-bad' }
-  if (og === ig) return { symbol: '✓', label: 'Direct match', cls: 'compat-ok' }
-  const adj = (og === 'DEF' && ig === 'MID') || (og === 'MID' && ig === 'DEF') ||
-              (og === 'MID' && ig === 'ATT') || (og === 'ATT' && ig === 'MID')
-  return adj
-    ? { symbol: '⚠', label: 'Stretched', cls: 'compat-warn' }
-    : { symbol: '❌', label: 'Invalid',   cls: 'compat-bad' }
-}
+// ── Match Strategy Hub helpers ────────────────────────────────────────────
 
 function getArchetype(player) {
   const pos = player.api_position || player.position || 'CM'
@@ -380,16 +578,6 @@ function getArchetype(player) {
   if (['ST', 'CF', 'SS'].includes(pos)) return 'Attacking threat'
   return 'Tactical change'
 }
-
-function getImpactScore(player) {
-  return Math.min(99, Math.round((player.overall || 75) * 0.6 + 30))
-}
-
-const PRINT_SLOT_ORDER = [
-  'GK', 'LB', 'LWB', 'CB', 'RCB', 'RB', 'RWB',
-  'CDM', 'LM', 'CM', 'RM', 'LAM', 'CAM', 'RAM',
-  'LW', 'RW', 'ST', 'CF', 'SS',
-]
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -415,11 +603,12 @@ export default function Planner() {
   }
 
   // ── Tab / competition state ──────────────────────────────────────────────
-  const [activeTab,    setActiveTab]    = useState('readiness')
+  const [activeTab,    setActiveTab]    = useState('strategy')
   const [selectedComp, setSelectedComp] = useState(domesticComps[0]?.code || 'PL')
 
   useEffect(() => {
     if (domesticComps.length > 0) setSelectedComp(domesticComps[0].code)
+    setSelectedCompetition(null)
   }, [teamId])
 
   // ── Squad data ───────────────────────────────────────────────────────────
@@ -450,7 +639,10 @@ export default function Planner() {
   const groupedSquad = useMemo(() => groupPlayers(fullSquad), [fullSquad])
 
   // ── Player statuses (Readiness tab) ─────────────────────────────────────
-  const [playerStatuses, setPlayerStatuses] = useState({})
+  const [playerStatuses, setPlayerStatuses] = useState(() => {
+    if (!teamId) return {}
+    try { return JSON.parse(localStorage.getItem(`subhub_player_statuses_${teamId}`)) || {} } catch { return {} }
+  })
 
   const updateStatus = (playerName, status) => {
     setPlayerStatuses(prev => ({ ...prev, [playerName]: status }))
@@ -469,7 +661,42 @@ export default function Planner() {
     try { localStorage.setItem('subhub_excluded_players', JSON.stringify(excludedPlayers)) } catch {}
   }, [excludedPlayers])
 
-  useEffect(() => { setPlayerStatuses({}) }, [teamId])
+  // Persist full status map per team so all flags survive refresh
+  useEffect(() => {
+    if (!teamId) return
+    try { localStorage.setItem(`subhub_player_statuses_${teamId}`, JSON.stringify(playerStatuses)) } catch {}
+  }, [teamId, playerStatuses])
+
+  useEffect(() => {
+    if (!teamId) return
+    try {
+      const stored = localStorage.getItem(`subhub_player_statuses_${teamId}`)
+      setPlayerStatuses(stored ? JSON.parse(stored) : {})
+    } catch { setPlayerStatuses({}) }
+  }, [teamId])
+
+  // ── Auto-evict injured/suspended from builtXI when statuses change ────────
+  useEffect(() => {
+    const removed = []
+    const next = {}
+    let changed = false
+    for (const [key, player] of Object.entries(builtXI)) {
+      const s = player ? getStatus(player.name) : null
+      if (player && (s === 'injured' || s === 'suspended')) {
+        next[key] = null
+        changed = true
+        removed.push(player.short_name || player.name)
+      } else {
+        next[key] = player
+      }
+    }
+    if (changed) {
+      setBuiltXI(next)
+      removed.forEach(name => showToast(`Player removed — ${name} is unavailable`))
+    }
+    // Intentionally depends only on playerStatuses — fires when flags change, not on every XI edit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerStatuses])
 
   // ── Squad Manager / Toast ────────────────────────────────────────────────
   const [showSquadManager, setShowSquadManager] = useState(false)
@@ -481,6 +708,18 @@ export default function Planner() {
     setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id))
   }, [selectedTeam?.id])
   const [toast,            setToast]            = useState(null)
+  const [renamingId,       setRenamingId]       = useState(null)
+  const [renameValue,      setRenameValue]      = useState('')
+  const renameInputRef = useRef(null)
+
+  function commitRename(id) {
+    const trimmed = renameValue.trim()
+    if (trimmed) {
+      updateSquad(id, { name: trimmed })
+      setSavedSquads(getSavedSquads().filter(s => s.teamId === selectedTeam?.id))
+    }
+    setRenamingId(null)
+  }
 
   function showToast(msg) {
     setToast(msg)
@@ -490,6 +729,7 @@ export default function Planner() {
   // ── XI Builder state ─────────────────────────────────────────────────────
   const [builderFormation, setBuilderFormation] = useState('4-3-3')
   const [builtXI,          setBuiltXI]          = useState({})
+  const [builtBench,       setBuiltBench]       = useState([])
   const [draggedPlayer,    setDraggedPlayer]    = useState(null)
   const [bslSearch,        setBslSearch]        = useState('')
   const [bslFilter,        setBslFilter]        = useState('ALL')
@@ -499,87 +739,136 @@ export default function Planner() {
     [builtXI]
   )
 
+  const builtBenchKeys = useMemo(() =>
+    new Set(builtBench.map(p => p.id ?? p.name)),
+    [builtBench]
+  )
+
   const availablePlayers = useMemo(() =>
     fullSquad.filter(p =>
       !placedPlayerNames.includes(p.name) &&
-      !excludedPlayers.includes(p.name)
+      !excludedPlayers.includes(p.name) &&
+      !builtBenchKeys.has(p.id ?? p.name)
     ),
-    [fullSquad, placedPlayerNames, excludedPlayers]
+    [fullSquad, placedPlayerNames, excludedPlayers, builtBenchKeys]
+  )
+
+  // Builder pool includes injured/suspended so they appear greyed-out (bench pool still uses availablePlayers)
+  const builderPoolAll = useMemo(() =>
+    fullSquad.filter(p =>
+      !placedPlayerNames.includes(p.name) &&
+      !builtBenchKeys.has(p.id ?? p.name)
+    ),
+    [fullSquad, placedPlayerNames, builtBenchKeys]
   )
 
   const placedCount = Object.values(builtXI).filter(Boolean).length
 
-  // ── Sub Doctrine state ────────────────────────────────────────────────────
-  const [docSlots, setDocSlots] = useState([
-    { minute: 60, scenario: 'drawing',  subOff: '', subOn: '' },
-    { minute: 70, scenario: 'losing1',  subOff: '', subOn: '' },
-    { minute: 80, scenario: 'winning2', subOff: '', subOn: '' },
-  ])
-
-  const updateDocSlot = (i, field, value) =>
-    setDocSlots(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
-
-  // Active XI for doctrine: builtXI if complete, else startingXI
-  const doctrineXI = useMemo(() => {
-    const placed = Object.entries(builtXI)
-      .filter(([, p]) => p)
-      .map(([key, player]) => {
-        const slotDef = BUILDER_SLOTS[builderFormation].find(s => s.key === key)
-        return { ...player, assigned_slot: slotDef?.slot || player.api_position }
-      })
-    return placed.length === 11 ? placed : startingXI
-  }, [builtXI, builderFormation, startingXI])
-
-  const doctrineBench = useMemo(() =>
-    matchdayBench.filter(p => !excludedPlayers.includes(p.name)),
-    [matchdayBench, excludedPlayers]
+  // Doubtful players currently in the starting XI
+  const doubtfulInXI = useMemo(() =>
+    Object.values(builtXI)
+      .filter(p => p && getStatus(p.name) === 'doubtful')
+      .map(p => p.short_name || p.name),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [builtXI, playerStatuses]
   )
 
-  const doctrineXILabel = Object.values(builtXI).filter(Boolean).length === 11
-    ? 'XI Builder lineup'
-    : 'default squad lineup'
+  // ── Match Strategy Hub state ──────────────────────────────────────────────
+  // Opponent DNA selector
+  const [opponentTeam,      setOpponentTeam]      = useState(null)   // { id, name, shortName }
+  const [opponentDNA,       setOpponentDNA]       = useState(null)   // full DNA profile
+  const [opponentDNALoading, setOpponentDNALoading] = useState(false)
+  const [opponentDNAError,  setOpponentDNAError]  = useState(null)
+  const [showDNAOverride,   setShowDNAOverride]   = useState(false)
+  const [opponentManualKey, setOpponentManualKey] = useState('')     // manual override key
+  const [selectedCompetition, setSelectedCompetition] = useState(null)
+  const [competitionTeams,    setCompetitionTeams]    = useState([])
+  const [teamsLoading,        setTeamsLoading]        = useState(false)
 
-  const buildPrintContent = () => {
-    const sep = '═══════════════════════════════'
-    const rows = [
-      sep,
-      'TACTICAL BRIEFING',
-      `${teamName || 'Unknown Team'} vs [Opponent]`,
-      `Competition: ${theme.label}`,
-      `Formation: ${builderFormation}`,
-      sep, '',
-      'STARTING XI:',
-    ]
-    const xiSorted = [...doctrineXI].sort((a, b) => {
-      const ai = PRINT_SLOT_ORDER.indexOf(a.assigned_slot || a.api_position)
-      const bi = PRINT_SLOT_ORDER.indexOf(b.assigned_slot || b.api_position)
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
-    })
-    xiSorted.forEach(p =>
-      rows.push(`${(p.assigned_slot || p.api_position || '??').padEnd(5)}: ${p.short_name || p.name}`)
-    )
-    rows.push('', 'PLANNED SUBSTITUTIONS:')
-    const filled = docSlots.filter(s => s.subOff && s.subOn)
-    if (!filled.length) {
-      rows.push('None configured.')
-    } else {
-      filled.forEach(s => {
-        const offP = doctrineXI.find(p => p.name === s.subOff)
-        const onP  = doctrineBench.find(p => p.name === s.subOn)
-        rows.push(`${s.minute}' — If ${SCENARIOS[s.scenario]}:`)
-        rows.push(`  Sub OFF: ${offP?.short_name || s.subOff} (${offP?.assigned_slot || offP?.api_position || '?'})`)
-        rows.push(`  Sub ON:  ${onP?.short_name || s.subOn} (${onP?.api_position || '?'}) — Impact: ${onP ? getImpactScore(onP) : '—'}, ${onP ? getArchetype(onP) : '—'}`)
+  // Key matchup players
+  const [keyMatchupPlayers, setKeyMatchupPlayers] = useState([])
+  const [keyMatchupLoading, setKeyMatchupLoading] = useState(false)
+
+  // Fetch teams for the selected opponent competition
+  useEffect(() => {
+    const apiKey = COMP_TO_API_KEY[selectedCompetition]
+    if (!selectedCompetition || !apiKey) { setCompetitionTeams([]); return }
+    setTeamsLoading(true)
+    fetch(`/api/teams-by-competition?competition=${apiKey}`)
+      .then(r => r.json())
+      .then(setCompetitionTeams)
+      .catch(() => setCompetitionTeams([]))
+      .finally(() => setTeamsLoading(false))
+  }, [selectedCompetition])
+
+  // Fetch DNA whenever opponent team changes
+  useEffect(() => {
+    if (!opponentTeam) { setOpponentDNA(null); setOpponentDNAError(null); return }
+    setOpponentDNALoading(true)
+    setOpponentDNAError(null)
+    fetch(`/api/opponent-dna?team=${encodeURIComponent(opponentTeam.name)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.detail) {
+          setOpponentDNAError('Opponent DNA unavailable')
+          setOpponentDNA(null)
+        } else {
+          setOpponentDNA(data)
+        }
       })
-    }
-    const injNames  = Object.entries(playerStatuses).filter(([, s]) => s === 'injured').map(([n]) => n)
-    const doubNames = Object.entries(playerStatuses).filter(([, s]) => s === 'doubtful').map(([n]) => n)
-    rows.push('', 'SQUAD READINESS:')
-    rows.push(`Injured:  ${injNames.length  ? injNames.join(', ')  : 'None'}`)
-    rows.push(`Doubtful: ${doubNames.length ? doubNames.join(', ') : 'None'}`)
-    rows.push('', `Generated by SubHub — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
-    rows.push(sep)
-    return rows.join('\n')
-  }
+      .catch(() => setOpponentDNAError('Opponent DNA unavailable'))
+      .finally(() => setOpponentDNALoading(false))
+  }, [opponentTeam])
+
+  // Persist full match plan to localStorage — triggered by any planning change
+  useEffect(() => {
+    if (!teamId) return
+    try {
+      // Read-merge-write: never wipe a field that hasn't changed this render
+      const current = (() => {
+        try { return JSON.parse(localStorage.getItem('subhub_match_plan') || '{}') } catch { return {} }
+      })()
+
+      const xiEntries = Object.entries(builtXI).filter(([, p]) => p)
+      const xi = xiEntries.map(([key, player]) => {
+        const slotDef = BUILDER_SLOTS[builderFormation].find(s => s.key === key)
+        return { ...player, assigned_slot: slotDef?.slot || player.api_position, minute_entered: 0 }
+      })
+
+      const plan = {
+        ...current,
+        team:        teamId,
+        teamName:    teamName ?? current.teamName ?? '',
+        savedAt:     new Date().toISOString(),
+        opponentDNA: opponentDNA ?? current.opponentDNA ?? null,
+        key_players: keyMatchupPlayers.length > 0
+          ? keyMatchupPlayers.map(p => ({ name: p.name, position: p.position, reason: p.reason }))
+          : (current.key_players ?? []),
+        xi:          xi.length === 11 ? xi : (current.xi ?? []),
+        bench:       builtBench.length > 0 ? builtBench : (current.bench ?? []),
+        formation:   builderFormation,
+      }
+
+      localStorage.setItem('subhub_match_plan', JSON.stringify(plan))
+      console.log('[SubHub] subhub_match_plan saved:', plan)
+    } catch {}
+  }, [teamId, teamName, opponentDNA, keyMatchupPlayers, builtXI, builtBench, builderFormation])
+
+  // Effective opponent playstyle key: manual override → DNA → null
+  const effectiveOpponentStyle = showDNAOverride && opponentManualKey
+    ? opponentManualKey
+    : (opponentDNA?.playstyle_key ?? null)
+
+  // Fetch key matchup players when opponent DNA resolves
+  useEffect(() => {
+    if (!opponentDNA || !teamName) { setKeyMatchupPlayers([]); return }
+    setKeyMatchupLoading(true)
+    fetch(`/api/key-matchup-players?team=${encodeURIComponent(teamName)}&opponent=${encodeURIComponent(opponentDNA.team)}`)
+      .then(r => r.json())
+      .then(data => setKeyMatchupPlayers(Array.isArray(data) ? data : []))
+      .catch(() => setKeyMatchupPlayers([]))
+      .finally(() => setKeyMatchupLoading(false))
+  }, [opponentDNA, teamName])
 
   // ── Competition theme ────────────────────────────────────────────────────
   const theme = COMPETITION_THEMES[selectedComp] || DEFAULT_THEME
@@ -604,25 +893,30 @@ export default function Planner() {
       })
   }
 
+  const toggleBuiltBench = (player) => {
+    setBuiltBench(prev => {
+      const key = player.id ?? player.name
+      const already = prev.some(p => (p.id ?? p.name) === key)
+      if (already) return prev.filter(p => (p.id ?? p.name) !== key)
+      if (prev.length >= 7) return prev
+      return [...prev, player]
+    })
+  }
+
   const handleLoadIntoConsole = () => {
     const xi = buildXIFromBuilder()
     if (xi.length < 11) return
 
-    const activeBench = doctrineBench
-    const excludedPlayerIds = matchdayBench
-      .filter(p => excludedPlayers.includes(p.name))
-      .map(p => p.id)
-
     navigate(`/match/${teamId}`, {
       state: {
         confirmedXI:       xi,
-        confirmedBench:    activeBench,
+        confirmedBench:    builtBench,
         confirmedReserves: [],
         formation:         builderFormation,
         playstyle:         null,
         competition:       selectedComp || null,
         teamId,
-        excludedPlayerIds,
+        excludedPlayerIds: [],
       },
     })
   }
@@ -642,14 +936,13 @@ export default function Planner() {
     const name = window.prompt('Name this concept squad (e.g. "UCL High Press"):')
     if (!name) return
 
-    const activeBench = doctrineBench
     const result = saveSquad({
       name,
       competition: selectedComp || 'League',
       formation:   builderFormation,
       playstyle:   null,
       xi,
-      bench:       activeBench,
+      bench:       builtBench,
       teamId,
       teamName:    selectedTeam?.name || '',
     })
@@ -774,22 +1067,22 @@ export default function Planner() {
       {/* TAB NAVIGATION */}
       <div className="planner-tabs">
         <button
+          className={`planner-tab ${activeTab === 'strategy' ? 'active' : ''}`}
+          onClick={() => setActiveTab('strategy')}
+        >
+          MATCH STRATEGY HUB
+        </button>
+        <button
           className={`planner-tab ${activeTab === 'readiness' ? 'active' : ''}`}
           onClick={() => setActiveTab('readiness')}
         >
-          🩺 Squad Readiness
+          SQUAD READINESS
         </button>
         <button
           className={`planner-tab ${activeTab === 'builder' ? 'active' : ''}`}
           onClick={() => setActiveTab('builder')}
         >
-          ⚽ XI Builder
-        </button>
-        <button
-          className={`planner-tab ${activeTab === 'doctrine' ? 'active' : ''}`}
-          onClick={() => setActiveTab('doctrine')}
-        >
-          📋 Sub Doctrine
+          XI BUILDER
         </button>
       </div>
 
@@ -953,14 +1246,14 @@ export default function Planner() {
                   <button
                     key={f}
                     className={`toggle-pill ${builderFormation === f ? 'active' : ''}`}
-                    onClick={() => { setBuilderFormation(f); setBuiltXI({}) }}
+                    onClick={() => { setBuilderFormation(f); setBuiltXI({}); setBuiltBench([]) }}
                   >
                     {f}
                   </button>
                 ))}
               </div>
               <div className="builder-actions">
-                <button className="builder-clear-btn" onClick={() => setBuiltXI({})}>
+                <button className="builder-clear-btn" onClick={() => { setBuiltXI({}); setBuiltBench([]) }}>
                   Clear XI
                 </button>
                 <button
@@ -989,6 +1282,13 @@ export default function Planner() {
                 <span className="builder-complete">✓ XI Complete — ready to load</span>
               )}
             </div>
+
+            {/* Doubtful warning banner */}
+            {doubtfulInXI.length > 0 && (
+              <div className="builder-doubtful-warning">
+                {doubtfulInXI.length} doubtful player{doubtfulInXI.length > 1 ? 's' : ''} in your starting XI — confirm you want to proceed
+              </div>
+            )}
 
             {/* Main layout */}
             <div className="builder-layout">
@@ -1029,7 +1329,9 @@ export default function Planner() {
                         onDrop={e => {
                           e.preventDefault()
                           if (!draggedPlayer) return
-                          if (!isCompatibleForSlot(draggedPlayer, slotDef.slot)) {
+                          const dpStatus = getStatus(draggedPlayer.name)
+                          if (dpStatus === 'injured' || dpStatus === 'suspended') { setDraggedPlayer(null); return }
+                          if (!isCompatibleForSlot(draggedPlayer, slotDef.slot, builderFormation)) {
                             e.currentTarget.classList.add('invalid')
                             setTimeout(() => e.currentTarget.classList.remove('invalid'), 600)
                             return
@@ -1096,7 +1398,7 @@ export default function Planner() {
                 </div>
 
                 <div className="bsl-players">
-                  {availablePlayers
+                  {builderPoolAll
                     .filter(p => {
                       const name = (p.short_name || p.name).toLowerCase()
                       const matchSearch = !bslSearch || name.includes(bslSearch)
@@ -1109,198 +1411,294 @@ export default function Planner() {
                         (bslFilter === 'ATT' && ['ST', 'CF', 'LW', 'RW'].includes(pos))
                       return matchSearch && matchFilter
                     })
-                    .map(player => (
-                      <div
-                        key={player.name}
-                        className="bsl-player-row"
-                        draggable
-                        onDragStart={() => setDraggedPlayer(player)}
-                      >
-                        <span className="bsl-pos">{player.api_position}</span>
-                        <span className="bsl-name">{player.short_name || player.name}</span>
-                        <span className="bsl-ovr">{player.overall}</span>
-                      </div>
-                    ))
+                    .map(player => {
+                      const status    = getStatus(player.name)
+                      const isBlocked = status === 'injured' || status === 'suspended'
+                      const isDoubtful = status === 'doubtful'
+                      return (
+                        <div
+                          key={player.name}
+                          className={`bsl-player-row${isBlocked ? ' bsl-blocked' : ''}${isDoubtful ? ' bsl-doubtful' : ''}`}
+                          draggable={!isBlocked}
+                          onDragStart={isBlocked ? undefined : () => setDraggedPlayer(player)}
+                        >
+                          <span className="bsl-pos">{player.api_position}</span>
+                          <span className="bsl-name">{player.short_name || player.name}</span>
+                          <span className="bsl-ovr">{player.overall}</span>
+                          {isBlocked && (
+                            <span className="bsl-avail-badge bsl-badge-blocked">
+                              {status === 'injured' ? 'Injured' : 'Suspended'}
+                            </span>
+                          )}
+                          {isDoubtful && (
+                            <span className="bsl-avail-badge bsl-badge-doubtful">Doubtful</span>
+                          )}
+                        </div>
+                      )
+                    })
                   }
                 </div>
               </div>
 
             </div>
+
+            {/* ── BENCH SELECTION (shown once XI is complete) ── */}
+            {placedCount === 11 && (
+              <div className="builder-bench-section">
+                <div className="builder-bench-header">
+                  <span className="builder-bench-title">BENCH</span>
+                  <span className="builder-bench-count">{builtBench.length}/7</span>
+                  <span className="builder-bench-hint">Click to add — max 7, no XI players</span>
+                </div>
+
+                {builtBench.length > 0 && (
+                  <div className="builder-bench-selected">
+                    {builtBench.map(p => (
+                      <div
+                        key={p.id ?? p.name}
+                        className="builder-bench-chip"
+                        onClick={() => toggleBuiltBench(p)}
+                        title="Click to remove"
+                      >
+                        <span className="bbc-pos">{p.api_position}</span>
+                        <span className="bbc-name">{getSurname(p.short_name || p.name)}</span>
+                        <span className="bbc-remove">×</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="builder-bench-pool">
+                  {availablePlayers
+                    .map(p => (
+                      <div
+                        key={p.id ?? p.name}
+                        className={`builder-bench-row${builtBench.length >= 7 ? ' disabled' : ''}`}
+                        onClick={() => toggleBuiltBench(p)}
+                      >
+                        <span className="bbl-pos">{p.api_position}</span>
+                        <span className="bbl-name">{p.short_name || p.name}</span>
+                        <span className="bbl-ovr">{p.overall}</span>
+                        <span className="bbl-add">+</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── SUB DOCTRINE ── */}
-        {activeTab === 'doctrine' && (
-          <div className="tab-doctrine">
+        {/* ── MATCH STRATEGY HUB ── */}
+        {activeTab === 'strategy' && (
+          <div className="tab-strategy">
 
-            <div className="doctrine-header">
-              <div className="doctrine-title">
-                <h2>SUB DOCTRINE</h2>
-                <p>
-                  Plan your 3 substitutions before kickoff.
-                  {' '}Using <strong>{doctrineXILabel}</strong>.
-                  {doctrineBench.length === 0 && ' — Load a squad first.'}
-                </p>
+            <div className="strategy-header">
+              <div className="strategy-title">
+                <h2>MATCH STRATEGY HUB</h2>
+                <p>Select opponent to analyse key matchup players and tactical DNA.</p>
               </div>
             </div>
 
-            {/* ── 3 Sub Slot Cards ── */}
-            <div className="doctrine-slots">
-              {docSlots.map((slot, i) => {
-                const subOffPlayer = doctrineXI.find(p => p.name === slot.subOff)
-                const subOnPlayer  = doctrineBench.find(p => p.name === slot.subOn)
-                const compat       = getCompatibility(subOffPlayer, subOnPlayer)
-                const impact       = subOnPlayer ? getImpactScore(subOnPlayer) : null
-                const archetype    = subOnPlayer ? getArchetype(subOnPlayer)   : null
+            {/* ── Opponent DNA Selector ── */}
+            <div className="opp-playstyle-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
 
-                return (
-                  <div key={i} className="doctrine-slot-card">
+              {/* Competition filter — derived from same domesticComps + uefaComps as the header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span className="opp-playstyle-label">Competition</span>
+                <div className="competition-pills">
+                  {[...domesticComps, ...uefaComps].map(comp => (
+                    <button
+                      key={comp.code}
+                      className={`comp-pill ${selectedCompetition === comp.code ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedCompetition(p => p === comp.code ? null : comp.code)
+                        setOpponentTeam(null)
+                        setShowDNAOverride(false)
+                        setOpponentManualKey('')
+                      }}
+                    >
+                      {comp.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                    <div className="dsc-header">
-                      <span className="dsc-label">SUB {i + 1}</span>
-                      <span className="dsc-minute-badge">{slot.minute}'</span>
-                    </div>
+              {/* Opponent dropdown — only populated once a competition is chosen */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span className="opp-playstyle-label">Opponent</span>
+                <div style={{ position: 'relative', minWidth: 200 }}>
+                  <select
+                    value={opponentTeam?.name ?? ''}
+                    onChange={e => {
+                      const t = competitionTeams.find(x => x.name === e.target.value)
+                      setOpponentTeam(t ?? null)
+                      setShowDNAOverride(false)
+                      setOpponentManualKey('')
+                    }}
+                    disabled={!selectedCompetition}
+                    style={{
+                      width: '100%',
+                      appearance: 'none', WebkitAppearance: 'none',
+                      background: 'rgba(255,255,255,0.04)',
+                      color: selectedCompetition ? 'var(--text)' : 'var(--muted)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 4,
+                      padding: '5px 30px 5px 10px',
+                      fontFamily: 'Rajdhani', fontWeight: 600, fontSize: 13,
+                      cursor: selectedCompetition ? 'pointer' : 'default',
+                      outline: 'none',
+                      opacity: selectedCompetition ? 1 : 0.5,
+                      transition: 'border-color 0.15s',
+                    }}
+                    onMouseEnter={e => { if (selectedCompetition) e.target.style.borderColor = 'rgba(255,255,255,0.28)' }}
+                    onMouseLeave={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)' }}
+                  >
+                    <option value="">
+                      {!selectedCompetition
+                        ? 'Select a competition first'
+                        : teamsLoading
+                        ? 'Loading teams…'
+                        : '— Select opponent —'
+                      }
+                    </option>
+                    {competitionTeams.map(t => (
+                      <option key={t.fc26_club} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                  <svg
+                    viewBox="0 0 10 6" width="10" height="6"
+                    style={{
+                      position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                      pointerEvents: 'none', opacity: selectedCompetition ? 0.5 : 0.25,
+                    }}
+                  >
+                    <path d="M0 0l5 6 5-6z" fill="currentColor" />
+                  </svg>
+                </div>
+                {opponentDNALoading && (
+                  <span style={{ color: 'var(--muted)', fontFamily: 'Rajdhani', fontSize: 12 }}>Fetching DNA…</span>
+                )}
+              </div>
 
-                    <div className="dsc-controls">
+              {/* DNA unavailable notice */}
+              {opponentDNAError && (
+                <span style={{ color: 'var(--amber)', fontFamily: 'Rajdhani', fontSize: 12 }}>
+                  {opponentDNAError}
+                </span>
+              )}
 
-                      {/* Minute slider */}
-                      <div className="dsc-field">
-                        <label className="dsc-field-label">TRIGGER MINUTE</label>
-                        <div className="dsc-slider-row">
-                          <input
-                            type="range" min="45" max="90"
-                            value={slot.minute}
-                            className="dsc-slider"
-                            onChange={e => updateDocSlot(i, 'minute', Number(e.target.value))}
-                          />
-                          <span className="dsc-slider-val">{slot.minute}'</span>
-                        </div>
-                      </div>
-
-                      {/* Scenario */}
-                      <div className="dsc-field">
-                        <label className="dsc-field-label">SCENARIO</label>
-                        <select
-                          className="dsc-select"
-                          value={slot.scenario}
-                          onChange={e => updateDocSlot(i, 'scenario', e.target.value)}
-                        >
-                          {Object.entries(SCENARIOS).map(([val, label]) => (
-                            <option key={val} value={val}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Sub OFF / Sub ON row */}
-                      <div className="dsc-swap-row">
-                        <div className="dsc-field dsc-swap-field">
-                          <label className="dsc-field-label">SUB OFF ↓</label>
-                          <select
-                            className="dsc-select"
-                            value={slot.subOff}
-                            onChange={e => updateDocSlot(i, 'subOff', e.target.value)}
-                          >
-                            <option value="">— Select player —</option>
-                            {doctrineXI.map(p => (
-                              <option key={p.name} value={p.name}>
-                                {(p.assigned_slot || p.api_position || '?').padEnd(4)} · {p.short_name || p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="dsc-swap-arrow">⇄</div>
-
-                        <div className="dsc-field dsc-swap-field">
-                          <label className="dsc-field-label">SUB ON ↑</label>
-                          <select
-                            className="dsc-select"
-                            value={slot.subOn}
-                            onChange={e => updateDocSlot(i, 'subOn', e.target.value)}
-                          >
-                            <option value="">— Select player —</option>
-                            {doctrineBench.map(p => (
-                              <option key={p.name} value={p.name}>
-                                {(p.api_position || '?').padEnd(4)} · {p.short_name || p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Analysis bar */}
-                    {slot.subOff && slot.subOn && (
-                      <div className="dsc-analysis">
-                        {compat && (
-                          <span className={`dsc-compat ${compat.cls}`}>
-                            {compat.symbol} {compat.label}
-                          </span>
-                        )}
-                        {impact !== null && (
-                          <span className="dsc-impact">
-                            Expected impact: <strong>{impact}</strong> · {archetype}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
+              {/* Compact DNA card */}
+              {opponentDNA && !opponentDNAError && (
+                <div className="opp-dna-card">
+                  <div className="opp-dna-header">
+                    <span className="opp-dna-title">OPPONENT DNA — {opponentDNA.team}</span>
+                    <button
+                      className="opp-dna-override-toggle"
+                      onClick={() => setShowDNAOverride(v => !v)}
+                    >
+                      {showDNAOverride ? 'Use DNA' : 'Override'}
+                    </button>
                   </div>
-                )
-              })}
-            </div>
 
-            {/* ── Scenario Preview ── */}
-            <div className="doctrine-preview">
-              <div className="doctrine-preview-header">SCENARIO PREVIEW</div>
-              <div className="scenario-grid">
-                {[
-                  { col: 'winning', label: 'WINNING', color: '#00ff87' },
-                  { col: 'drawing', label: 'DRAWING', color: '#ffb800' },
-                  { col: 'losing',  label: 'LOSING',  color: '#ff3d3d' },
-                ].map(({ col, label, color }) => {
-                  const hits  = docSlots
-                    .map((s, i) => ({ ...s, i }))
-                    .filter(s => SCENARIO_TO_COL[s.scenario] === col && s.subOff && s.subOn)
-                  const delta = col === 'winning' ? '+2–4%' : col === 'drawing' ? '+3–5%' : '+1–3%'
-                  return (
-                    <div key={col} className="scenario-col">
-                      <div className="scenario-col-header" style={{ color, borderColor: color }}>
-                        {label}
-                      </div>
-                      {hits.length === 0 ? (
-                        <div className="scenario-no-sub">No sub planned</div>
-                      ) : hits.map(s => {
-                        const offP = doctrineXI.find(p => p.name === s.subOff)
-                        const onP  = doctrineBench.find(p => p.name === s.subOn)
-                        return (
-                          <div key={s.i} className="scenario-sub-entry">
-                            <div className="sse-minute" style={{ color }}>{s.minute}'</div>
-                            <div className="sse-players">
-                              <span className="sse-off">{offP?.short_name || s.subOff}</span>
-                              <span className="sse-arrow">→</span>
-                              <span className="sse-on">{onP?.short_name || s.subOn}</span>
-                            </div>
-                            <div className="sse-delta" style={{ color }}>{delta} win prob</div>
-                          </div>
-                        )
-                      })}
+                  {showDNAOverride ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <span style={{ color: 'var(--muted)', fontFamily: 'Rajdhani', fontSize: 12 }}>Manual style:</span>
+                      <select
+                        value={opponentManualKey}
+                        onChange={e => setOpponentManualKey(e.target.value)}
+                        style={{
+                          background: '#1a1a1a', color: 'var(--text)',
+                          border: '1px solid rgba(255,184,0,0.4)', borderRadius: 4,
+                          padding: '3px 6px', fontFamily: 'Rajdhani', fontSize: 12,
+                          cursor: 'pointer', outline: 'none',
+                        }}
+                      >
+                        <option value="">None</option>
+                        <option value="high_line_press">High-Line Press</option>
+                        <option value="deep_block">Deep Block</option>
+                        <option value="counter_attack">Counter Attack</option>
+                        <option value="elite_wingers">Elite Wingers</option>
+                        <option value="physical_dominance">Physical Dominance</option>
+                      </select>
                     </div>
-                  )
-                })}
+                  ) : (
+                    <div className="opp-dna-rows">
+                      <div className="opp-dna-row">
+                        <span className="opp-dna-label">Playstyle</span>
+                        <span className="opp-dna-value opp-dna-playstyle">{opponentDNA.playstyle}</span>
+                      </div>
+                      <div className="opp-dna-row">
+                        <span className="opp-dna-label">Press Intensity</span>
+                        <span className="opp-dna-value">{opponentDNA.press_intensity}</span>
+                      </div>
+                      <div className="opp-dna-row">
+                        <span className="opp-dna-label">Pace Threat</span>
+                        <span className="opp-dna-value">{opponentDNA.pace_threat}</span>
+                      </div>
+                      <div className="opp-dna-row">
+                        <span className="opp-dna-label">Creative Threat</span>
+                        <span className="opp-dna-value">{opponentDNA.creative_threat}</span>
+                      </div>
+                      <div className="opp-dna-row">
+                        <span className="opp-dna-label">Physical Dominance</span>
+                        <span className="opp-dna-value">{opponentDNA.physical_dominance}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Cold state — no opponent selected yet */}
+            {!opponentTeam && (
+              <span style={{
+                fontFamily: 'Rajdhani', fontSize: 12, fontWeight: 600,
+                color: 'rgba(255,255,255,0.2)', letterSpacing: '0.06em',
+                textTransform: 'uppercase', display: 'block', marginTop: 8,
+              }}>
+                Select your next opponent to begin
+              </span>
+            )}
+
+            {/* Key matchup players — shown once opponent is selected */}
+            {opponentTeam && keyMatchupLoading && (
+              <span style={{ fontFamily: 'Rajdhani', fontSize: 12, color: 'rgba(255,255,255,0.3)',
+                letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginTop: 8 }}>
+                Analysing matchup…
+              </span>
+            )}
+            {opponentTeam && !keyMatchupLoading && keyMatchupPlayers.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 11,
+                  color: 'rgba(255,184,0,0.7)', letterSpacing: '0.1em', textTransform: 'uppercase',
+                  marginBottom: 10 }}>
+                  KEY PLAYERS VS {opponentDNA?.team?.toUpperCase() ?? 'OPPONENT'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {keyMatchupPlayers.map((p, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12,
+                      background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.2)',
+                      borderRadius: 6, padding: '8px 12px' }}>
+                      <div style={{ width: 4, height: 36, background: 'rgba(255,184,0,0.6)',
+                        borderRadius: 2, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 13,
+                          color: 'var(--text)' }}>{p.name}</div>
+                        <div style={{ fontFamily: 'Rajdhani', fontSize: 11, color: 'var(--muted)',
+                          marginTop: 2 }}>{p.reason}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                        <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 12,
+                          color: 'rgba(255,184,0,0.8)' }}>{p.overall}</span>
+                        <span style={{ fontFamily: 'Rajdhani', fontSize: 10, color: 'var(--muted)',
+                          letterSpacing: '0.06em' }}>{p.position}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            {/* ── Export Button ── */}
-            <button className="doctrine-export-btn" onClick={() => window.print()}>
-              📋 EXPORT TACTICAL BRIEFING
-            </button>
-
-            {/* ── Print-only content ── */}
-            <div className="tactical-briefing-print">
-              <pre className="tbp-content">{buildPrintContent()}</pre>
-            </div>
+            )}
 
           </div>
         )}
@@ -1390,9 +1788,41 @@ export default function Planner() {
                         padding: '2px 5px', cursor: 'pointer',
                       }}
                     >✕</button>
-                    <div style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 13, color: compTheme.textAccent || '#c8963e', lineHeight: 1.2, paddingRight: 18 }}>
-                      {squad.name}
-                    </div>
+                    {renamingId === squad.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(squad.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); commitRename(squad.id) }
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        autoFocus
+                        style={{
+                          fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 13,
+                          color: compTheme.textAccent || '#c8963e', lineHeight: 1.2,
+                          background: 'rgba(255,255,255,0.07)',
+                          border: `1px solid ${compTheme.cardBorder || '#c8963e'}`,
+                          borderRadius: 3, padding: '2px 5px', width: '100%',
+                          outline: 'none', boxSizing: 'border-box',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        onDoubleClick={() => { setRenamingId(squad.id); setRenameValue(squad.name) }}
+                        title="Double-click to rename"
+                        style={{
+                          fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 13,
+                          color: compTheme.textAccent || '#c8963e', lineHeight: 1.2,
+                          paddingRight: 18, cursor: 'text',
+                          display: 'flex', alignItems: 'center', gap: 4,
+                        }}
+                      >
+                        {squad.name}
+                        <span style={{ fontSize: 9, opacity: 0.4, flexShrink: 0 }}>✎</span>
+                      </div>
+                    )}
                     <div style={{ fontFamily: 'Rajdhani', fontSize: 10, color: 'var(--muted)' }}>
                       {squad.teamName || '—'}
                     </div>

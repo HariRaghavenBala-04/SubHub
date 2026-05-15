@@ -1,127 +1,308 @@
-/**
- * SVG formation connection lines — chemistry-style coloring.
- * Same-group connections: gold. Adjacent-group: green. Cross-group: amber.
- * Critical stamina override: red.
- */
-import { useMemo } from 'react'
+import React from 'react'
 
-const GROUP = {
-  GK: 0,
-  CB: 1, LCB: 1, RCB: 1, LB: 1, RB: 1, LWB: 1, RWB: 1,
-  DM: 2, CDM: 2, CM: 2, LM: 2, RM: 2, LCM: 2, RCM: 2,
-  AM: 3, CAM: 3, LAM: 3, RAM: 3,
-  LW: 4, RW: 4, W: 4, ST: 4, SS: 4,
+// Per-formation explicit connection maps.
+// Each pair is [slotA, slotB] using exact slot
+// label strings from formations.js.
+// Duplicate slot labels (e.g. two CBs) are matched
+// by index — first occurrence = index 0, second = 1.
+
+const FORMATION_LINKS = {
+  '4-3-3': [
+    ['GK','CB'],['GK','CB'],
+    ['LB','LW'],['RB','RW'],
+    ['LB','CB'],['RB','CB'],
+    ['CB','CM'],['CB','CM'],
+    ['LCM','LW'],['RCM','RW'],
+    ['CM','ST'],
+  ],
+  '4-4-2': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LM'],['RB','RM'],
+    ['LCB','LCM'],['RCB','RCM'],
+    ['LM','LST'],['RM','RST'],
+    ['LCM','LST'],['RCM','RST'],
+  ],
+  '4-2-3-1': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','CDM'],['RB','CDM'],
+    ['LCB','CDM'],['RCB','CDM'],
+    ['CDM','CAM'],['CDM','CAM'],
+    ['LW','ST'],['RW','ST'],['CAM','ST'],
+  ],
+  '4-2-3-1 Wide': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LM'],['RB','RM'],
+    ['LCB','LDM'],['RCB','RDM'],
+    ['LDM','CAM'],['RDM','CAM'],
+    ['LM','ST'],['RM','ST'],
+  ],
+  '4-2-3-1 Narrow': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LCAM'],['RB','RCAM'],
+    ['LCB','LDM'],['RCB','RDM'],
+    ['LDM','CAM'],['RDM','CAM'],
+    ['LCAM','ST'],['RCAM','ST'],
+  ],
+  '4-1-2-1-2 Wide': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LM'],['RB','RM'],
+    ['LCB','CDM'],['RCB','CDM'],
+    ['CDM','CAM'],
+    ['LM','LST'],['RM','RST'],
+    ['CAM','LST'],['CAM','RST'],
+  ],
+  '4-1-2-1-2 Narrow': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LCM'],['RB','RCM'],
+    ['LCB','CDM'],['RCB','CDM'],
+    ['CDM','CAM'],
+    ['LCM','LST'],['RCM','RST'],
+  ],
+  '4-4-1-1': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LM'],['RB','RM'],
+    ['LCB','LCM'],['RCB','RCM'],
+    ['LM','CF'],['RM','CF'],
+    ['CF','ST'],
+  ],
+  '4-2-2-2': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LCDM'],['RB','RCDM'],
+    ['LCB','LCDM'],['RCB','RCDM'],
+    ['LCDM','LCAM'],['RCDM','RCAM'],
+    ['LCAM','LST'],['RCAM','RST'],
+  ],
+  '4-3-1-2': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LCM'],['RB','RCM'],
+    ['LCB','CM'],['RCB','CM'],
+    ['CM','CAM'],
+    ['CAM','LST'],['CAM','RST'],
+  ],
+  '4-3-2-1': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LCM'],['RB','RCM'],
+    ['LCB','CM'],['RCB','CM'],
+    ['CM','LCF'],['CM','RCF'],
+    ['LCF','ST'],['RCF','ST'],
+  ],
+  '4-5-1': [
+    ['GK','LCB'],['GK','RCB'],
+    ['LB','LM'],['RB','RM'],
+    ['LCB','LCM'],['RCB','RCM'],
+    ['LCM','CM'],['RCM','CM'],
+    ['CM','ST'],
+  ],
+  '3-4-1-2': [
+    ['GK','CB'],
+    ['LCB','LM'],['RCB','RM'],
+    ['CB','LCM'],['CB','RCM'],
+    ['LCM','CAM'],['RCM','CAM'],
+    ['CAM','LST'],['CAM','RST'],
+  ],
+  '3-4-2-1': [
+    ['GK','CB'],
+    ['LCB','LM'],['RCB','RM'],
+    ['CB','LCM'],['CB','RCM'],
+    ['LCM','LCF'],['RCM','RCF'],
+    ['LCF','ST'],['RCF','ST'],
+  ],
+  '3-1-4-2': [
+    ['GK','CB'],
+    ['LCB','CDM'],['RCB','CDM'],
+    ['CDM','LCM'],['CDM','RCM'],
+    ['LM','LST'],['RM','RST'],
+    ['LCM','LST'],['RCM','RST'],
+  ],
+  '3-4-3': [
+    ['GK','CB'],
+    ['LCB','LM'],['RCB','RM'],
+    ['CB','LCM'],['CB','RCM'],
+    ['LM','LW'],['RM','RW'],
+    ['LCM','ST'],['RCM','ST'],
+  ],
+  '3-5-2': [
+    ['GK','CB'],
+    ['LCB','CDM'],['RCB','CDM'],
+    ['LM','LST'],['RM','RST'],
+    ['CDM','CAM'],['CDM','CAM'],
+    ['CAM','LST'],['CAM','RST'],
+  ],
+  '5-2-1-2': [
+    ['GK','CB'],
+    ['LWB','LCM'],['RWB','RCM'],
+    ['LCB','CB'],['RCB','CB'],
+    ['LCM','CAM'],['RCM','CAM'],
+    ['CAM','LST'],['CAM','RST'],
+  ],
+  '5-2-2-1': [
+    ['GK','CB'],
+    ['LWB','LCM'],['RWB','RCM'],
+    ['LCB','CB'],['RCB','CB'],
+    ['LCM','LCF'],['RCM','RCF'],
+    ['LCF','ST'],['RCF','ST'],
+  ],
+  '5-3-2': [
+    ['GK','CB'],
+    ['LWB','LCM'],['RWB','RCM'],
+    ['LCB','CB'],['RCB','CB'],
+    ['LCM','LST'],['RCM','RST'],
+    ['CM','LST'],
+  ],
+  '5-4-1 Flat': [
+    ['GK','CB'],
+    ['LWB','LM'],['RWB','RM'],
+    ['LCB','LCM'],['RCB','RCM'],
+    ['LM','ST'],['RM','ST'],
+  ],
+  '5-4-1 Diamond': [
+    ['GK','CB'],
+    ['LWB','CDM'],['RWB','CDM'],
+    ['LCB','CB'],['RCB','CB'],
+    ['CDM','CAM'],
+    ['LM','ST'],['RM','ST'],
+    ['CAM','ST'],
+  ],
 }
 
-const GROUP_NAME = {
-  0: 'GK', 1: 'DEF', 2: 'MID', 3: 'MID', 4: 'ATT',
+// Positional group for colour logic — unchanged
+function getGroup(slot) {
+  if (!slot) return 2
+  const s = slot.toUpperCase()
+  if (s === 'GK') return 0
+  if (['CB','LCB','RCB','LB','RB','LWB','RWB'].includes(s)) return 1
+  if (['CDM','LCDM','RCDM','LDM','RDM','CM','LCM','RCM','LM','RM'].includes(s)) return 2
+  if (['CAM','LCAM','RCAM'].includes(s)) return 3
+  return 4
 }
 
-function posGroup(slot) { return GROUP[slot?.toUpperCase()] ?? 2 }
+export default function FormationLines({
+  players,
+  formation,
+  highlightSlots = []
+}) {
+  if (!players || players.length < 2) return null
 
-function minStamina(a, b) { return Math.min(a?.stamina_pct ?? 80, b?.stamina_pct ?? 80) }
+  const links = FORMATION_LINKS[formation]
+  if (!links) return null
 
-function lineStyle(a, b) {
-  const pct = minStamina(a, b)
+  // Build lookup: slotLabel → list of players
+  // (handles duplicate slot labels by index)
+  const slotMap = {}
+  for (const p of players) {
+    const key = p.slot
+    if (!slotMap[key]) slotMap[key] = []
+    slotMap[key].push(p)
+  }
 
-  // Critical stamina override — red pulsing
-  if (pct < 40) return { stroke: 'rgba(255,61,61,0.45)',  strokeWidth: '1.5', dasharray: '3 3' }
+  // Track how many times each slot label has been
+  // consumed so duplicate slots resolve correctly
+  const slotUsage = {}
 
-  const ga = posGroup(a.slot)
-  const gb = posGroup(b.slot)
+  const lines = []
+  for (const [slotA, slotB] of links) {
+    const idxA = slotUsage[slotA] || 0
+    const idxB = slotUsage[slotB] || 0
+    const pA = slotMap[slotA]?.[idxA]
+    const pB = slotMap[slotB]?.[idxB]
+    if (!pA || !pB) continue
 
-  // Same group → gold (chemistry)
-  if (ga === gb) return { stroke: 'rgba(200,150,60,0.40)', strokeWidth: '1.2', dasharray: '3 5' }
+    slotUsage[slotA] = idxA + 1
+    slotUsage[slotB] = idxB + 1
 
-  // Adjacent groups (GK-DEF, DEF-MID, MID-ATT)
-  const diff = Math.abs(ga - gb)
-  if (diff === 1) return { stroke: 'rgba(0,255,135,0.25)', strokeWidth: '1.0', dasharray: '3 5' }
+    const x1 = pA.left
+    const y1 = pA.top
+    const x2 = pB.left
+    const y2 = pB.top
 
-  // Cross-group (GK-MID, DEF-ATT etc)
-  return { stroke: 'rgba(255,184,0,0.20)', strokeWidth: '0.8', dasharray: '3 5' }
-}
+    const gA = getGroup(pA.slot)
+    const gB = getGroup(pB.slot)
+    const diff = Math.abs(gA - gB)
 
-export default function FormationLines({ players, highlightSlots = [] }) {
-  const lines = useMemo(() => {
-    if (!players || players.length < 2) return []
+    const isHighlighted =
+      highlightSlots.includes(pA.slot) ||
+      highlightSlots.includes(pB.slot)
+    const isLowStamina =
+      (pA.stamina_pct != null && pA.stamina_pct < 40) ||
+      (pB.stamina_pct != null && pB.stamina_pct < 40)
 
-    const groupMap = {}
-    for (const p of players) {
-      const g = posGroup(p.slot)
-      if (!groupMap[g]) groupMap[g] = []
-      groupMap[g].push(p)
+    let stroke, strokeWidth, strokeOpacity, animate
+    if (isHighlighted || isLowStamina) {
+      stroke = 'rgba(255,61,61,0.7)'
+      strokeWidth = 1.5
+      strokeOpacity = 1
+      animate = true
+    } else if (diff === 0) {
+      stroke = 'rgba(200,150,60,0.5)'
+      strokeWidth = 1.2
+      strokeOpacity = 1
+      animate = false
+    } else if (diff === 1) {
+      stroke = 'rgba(0,255,135,0.35)'
+      strokeWidth = 1.0
+      strokeOpacity = 1
+      animate = false
+    } else {
+      stroke = 'rgba(255,184,0,0.25)'
+      strokeWidth = 0.8
+      strokeOpacity = 1
+      animate = false
     }
 
-    const groupKeys = Object.keys(groupMap).map(Number).sort((a, b) => a - b)
-    const result = []
-
-    // Horizontal within each group
-    for (const gk of groupKeys) {
-      const row = [...groupMap[gk]].sort((a, b) => a.left - b.left)
-      for (let i = 0; i < row.length - 1; i++) {
-        if (Math.abs(row[i].left - row[i + 1].left) <= 65) {
-          result.push({ from: row[i], to: row[i + 1], key: `h-${gk}-${i}` })
-        }
-      }
-    }
-
-    // Vertical: each player → nearest in next group
-    const CB_SLOTS = new Set(['CB', 'LCB', 'RCB'])
-    for (let gi = 0; gi < groupKeys.length - 1; gi++) {
-      const fromGroup = groupMap[groupKeys[gi]]
-      const toGroup   = groupMap[groupKeys[gi + 1]]
-      for (const fp of fromGroup) {
-        const sorted = [...toGroup].sort((a, b) => Math.abs(a.left - fp.left) - Math.abs(b.left - fp.left))
-        let targets
-        if (gi === 0) {
-          // GK → DEF: connect only to CB positions; fall back to nearest if no CBs
-          const cbs = sorted.filter(p => CB_SLOTS.has(p.slot?.toUpperCase()))
-          targets = cbs.length > 0 ? cbs : sorted.slice(0, 1)
-        } else {
-          targets = (fromGroup.length === 1 && toGroup.length >= 2) ? sorted.slice(0, 2) : sorted.slice(0, 1)
-        }
-        targets.forEach((tp, ti) => {
-          result.push({ from: fp, to: tp, key: `v-${gi}-${fp.slot}-${fp.left}-${ti}` })
-        })
-      }
-    }
-
-    return result
-  }, [players])
-
-  if (!lines.length) return null
+    lines.push({
+      x1, y1, x2, y2,
+      stroke, strokeWidth, strokeOpacity, animate,
+      diff,
+      key: `${slotA}-${slotB}-${lines.length}`
+    })
+  }
 
   return (
     <svg
       style={{
-        position: 'absolute', inset: 0,
+        position: 'absolute',
+        top: 0, left: 0,
         width: '100%', height: '100%',
-        pointerEvents: 'none', zIndex: 3,
-        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 1,
+        overflow: 'visible',
       }}
     >
       <defs>
-        <clipPath id="pitch-clip">
-          <rect x="0" y="0" width="100%" height="100%" />
-        </clipPath>
+        <filter id="glow-green">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-red">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
       </defs>
-      <g clipPath="url(#pitch-clip)">
-        {lines.map(({ from, to, key }) => {
-          const ls = lineStyle(from, to)
-          const isHighlighted = highlightSlots.includes(from.slot) || highlightSlots.includes(to.slot)
-          return (
-            <line
-              key={key}
-              x1={`${from.left}%`} y1={`${from.top}%`}
-              x2={`${to.left}%`}   y2={`${to.top}%`}
-              stroke={isHighlighted ? 'rgba(255,61,61,0.6)' : ls.stroke}
-              strokeWidth={isHighlighted ? '1.5' : ls.strokeWidth}
-              strokeDasharray={ls.dasharray}
-              style={{ animation: 'dashFlow 1.8s linear infinite' }}
-            />
-          )
-        })}
-      </g>
+      {lines.map(l => (
+        <line
+          key={l.key}
+          x1={`${l.x1}%`} y1={`${l.y1}%`}
+          x2={`${l.x2}%`} y2={`${l.y2}%`}
+          stroke={l.stroke}
+          strokeWidth={l.strokeWidth}
+          strokeOpacity={l.strokeOpacity}
+          strokeDasharray={l.animate ? '3 3' : '4 6'}
+          filter={
+            l.animate
+              ? 'url(#glow-red)'
+              : l.diff === 0
+                ? 'none'
+                : 'url(#glow-green)'
+          }
+          strokeLinecap="round"
+        />
+      ))}
     </svg>
   )
 }

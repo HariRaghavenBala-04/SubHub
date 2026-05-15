@@ -43,6 +43,86 @@ FORMATION_SLOTS: dict[str, list[str]] = {
     "4-5-1":   ["GK","LB","CB","CB","RB",
                  "LM","CM","CM","CM","RM",
                  "ST"],
+
+    "4-2-3-1 Wide":     ["GK","LB","LCB","RCB","RB",
+                          "LDM","RDM",
+                          "LM","CAM","RM",
+                          "ST"],
+
+    "4-2-3-1 Narrow":   ["GK","LB","LCB","RCB","RB",
+                          "LDM","RDM",
+                          "LCAM","CAM","RCAM",
+                          "ST"],
+
+    "4-1-2-1-2 Wide":   ["GK","LB","LCB","RCB","RB",
+                          "CDM",
+                          "LM","RM",
+                          "CAM",
+                          "LST","RST"],
+
+    "4-1-2-1-2 Narrow": ["GK","LB","LCB","RCB","RB",
+                          "CDM",
+                          "LCM","RCM",
+                          "CAM",
+                          "LST","RST"],
+
+    "4-4-1-1":          ["GK","LB","LCB","RCB","RB",
+                          "LM","LCM","RCM","RM",
+                          "CF","ST"],
+
+    "4-2-2-2":          ["GK","LB","LCB","RCB","RB",
+                          "LCDM","RCDM",
+                          "LCAM","RCAM",
+                          "LST","RST"],
+
+    "4-3-1-2":          ["GK","LB","LCB","RCB","RB",
+                          "LCM","CM","RCM",
+                          "CAM",
+                          "LST","RST"],
+
+    "4-3-2-1":          ["GK","LB","LCB","RCB","RB",
+                          "LCM","CM","RCM",
+                          "LCF","RCF",
+                          "ST"],
+
+    "3-4-1-2":          ["GK","LCB","CB","RCB",
+                          "LM","LCM","RCM","RM",
+                          "CAM",
+                          "LST","RST"],
+
+    "3-4-2-1":          ["GK","LCB","CB","RCB",
+                          "LM","LCM","RCM","RM",
+                          "LCF","RCF",
+                          "ST"],
+
+    "3-1-4-2":          ["GK","LCB","CB","RCB",
+                          "CDM",
+                          "LM","LCM","RCM","RM",
+                          "LST","RST"],
+
+    "3-4-3":            ["GK","LCB","CB","RCB",
+                          "LM","LCM","RCM","RM",
+                          "LW","ST","RW"],
+
+    "5-2-1-2":          ["GK","LWB","LCB","CB","RCB","RWB",
+                          "LCM","RCM",
+                          "CAM",
+                          "LST","RST"],
+
+    "5-2-2-1":          ["GK","LWB","LCB","CB","RCB","RWB",
+                          "LCM","RCM",
+                          "LCF","RCF",
+                          "ST"],
+
+    "5-4-1 Flat":       ["GK","LWB","LCB","CB","RCB","RWB",
+                          "LM","LCM","RCM","RM",
+                          "ST"],
+
+    "5-4-1 Diamond":    ["GK","LWB","LCB","CB","RCB","RWB",
+                          "CDM",
+                          "LM","RM",
+                          "CAM",
+                          "ST"],
 }
 
 SLOT_TO_FC26_COLUMN: dict[str, str] = {

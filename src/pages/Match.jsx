@@ -20,11 +20,11 @@ import { computeStamina, computeClientRecs, isCompatibleDrop, getGameStatusText 
 import { getSavedSquads } from '../utils/squadStorage'
 import { UEFA_ELIGIBILITY } from '../utils/uefaEligibility'
 
-const INTENTS = [
-  { value: 'protect_lead', label: '🛡 Protect Lead' },
-  { value: 'chase_game',   label: '⚔ Chase Game'   },
-  { value: 'tactical',     label: '🔄 Tactical'     },
-]
+const SCENARIO_INTENSITY_MAP = {
+  chasing:    'attacking',
+  protecting: 'defensive',
+  level:      '',
+}
 
 // ── Competition format — drives ET/PK rules ───────────────────────────────
 const COMPETITION_FORMAT = {
@@ -113,8 +113,24 @@ const FORMATION_SLOT_ORDER = {
   '4-4-2':   ['GK','LB','CB','CB','RB','LM','CM','CM','RM','ST','ST'],
   '4-2-3-1': ['GK','LB','CB','CB','RB','CDM','CDM','LW','CAM','RW','ST'],
   '3-5-2':   ['GK','CB','CB','CB','LM','CM','CM','CM','RM','ST','ST'],
-  '5-3-2':   ['GK','LB','CB','CB','CB','RB','CM','CM','CM','ST','ST'],
+  '5-3-2':   ['GK','LWB','CB','CB','CB','RWB','CM','CM','CM','ST','ST'],
   '4-5-1':   ['GK','LB','CB','CB','RB','LM','CM','CM','CM','RM','ST'],
+  '4-2-3-1 Wide':     ['GK','LB','LCB','RCB','RB','LDM','RDM','LM','CAM','RM','ST'],
+  '4-2-3-1 Narrow':   ['GK','LB','LCB','RCB','RB','LDM','RDM','LCAM','CAM','RCAM','ST'],
+  '4-1-2-1-2 Wide':   ['GK','LB','LCB','RCB','RB','CDM','LM','RM','CAM','LST','RST'],
+  '4-1-2-1-2 Narrow': ['GK','LB','LCB','RCB','RB','CDM','LCM','RCM','CAM','LST','RST'],
+  '4-4-1-1':          ['GK','LB','LCB','RCB','RB','LM','LCM','RCM','RM','CF','ST'],
+  '4-2-2-2':          ['GK','LB','LCB','RCB','RB','LCDM','RCDM','LCAM','RCAM','LST','RST'],
+  '4-3-1-2':          ['GK','LB','LCB','RCB','RB','LCM','CM','RCM','CAM','LST','RST'],
+  '4-3-2-1':          ['GK','LB','LCB','RCB','RB','LCM','CM','RCM','LCF','RCF','ST'],
+  '3-4-1-2':          ['GK','LCB','CB','RCB','LM','LCM','RCM','RM','CAM','LST','RST'],
+  '3-4-2-1':          ['GK','LCB','CB','RCB','LM','LCM','RCM','RM','LCF','RCF','ST'],
+  '3-1-4-2':          ['GK','LCB','CB','RCB','CDM','LM','LCM','RCM','RM','LST','RST'],
+  '3-4-3':            ['GK','LCB','CB','RCB','LM','LCM','RCM','RM','LW','ST','RW'],
+  '5-2-1-2':          ['GK','LWB','LCB','CB','RCB','RWB','LCM','RCM','CAM','LST','RST'],
+  '5-2-2-1':          ['GK','LWB','LCB','CB','RCB','RWB','LCM','RCM','LCF','RCF','ST'],
+  '5-4-1 Flat':       ['GK','LWB','LCB','CB','RCB','RWB','LM','LCM','RCM','RM','ST'],
+  '5-4-1 Diamond':    ['GK','LWB','LCB','CB','RCB','RWB','CDM','LM','RM','CAM','ST'],
 }
 
 function sortXIByFormation(xi, slotOrder) {
@@ -136,17 +152,35 @@ function getPositionCompatibility(playerPos, slotPos) {
   const sp = slotPos.toUpperCase()
   if (pp === sp) return 'natural'
 
+  // Normalise new slot labels to their base position
+  const SLOT_NORMALISE = {
+    LCB: 'CB', RCB: 'CB',
+    LCM: 'CM', RCM: 'CM',
+    LDM: 'CDM', RDM: 'CDM',
+    LCDM: 'CDM', RCDM: 'CDM',
+    LCAM: 'CAM', RCAM: 'CAM',
+    LST: 'ST', RST: 'ST',
+    LCF: 'CF', RCF: 'CF',
+  }
+  const normSP = SLOT_NORMALISE[sp] || sp
+  const normPP = SLOT_NORMALISE[pp] || pp
+
+  // Re-check exact match after normalisation
+  if (normPP === normSP) return 'natural'
+
+  if (normPP === 'GK' || normSP === 'GK') return 'blocked'
+
   const ATTACKERS = ['ST','CF','LW','RW','LM','RM','CAM','SS']
   const DEFENDERS = ['CB','LB','RB','LWB','RWB']
-  const isAttacker   = ATTACKERS.includes(pp)
-  const isDefender   = DEFENDERS.includes(pp)
-  const slotDefender = DEFENDERS.includes(sp)
-  const slotAttacker = ATTACKERS.includes(sp)
+  const isAttacker   = ATTACKERS.includes(normPP)
+  const isDefender   = DEFENDERS.includes(normPP)
+  const slotAttacker = ATTACKERS.includes(normSP)
+  const slotDefender = DEFENDERS.includes(normSP)
 
-  if (pp === 'GK' || sp === 'GK') return 'blocked'
-  if (isAttacker && slotDefender)  return 'blocked'
-  if (isDefender && slotAttacker)  return 'tactical'
+  if (isAttacker && slotDefender) return 'blocked'
 
+  // WB→wide mid must be checked before the
+  // defender→attacker tactical catch-all
   const NATURAL_SWAPS = [
     ['LB','RB'],   ['LW','RW'],   ['LM','RM'],
     ['CM','CDM'],  ['CM','CAM'],  ['CDM','CAM'],
@@ -155,10 +189,14 @@ function getPositionCompatibility(playerPos, slotPos) {
     ['CDM','LM'],  ['CDM','RM'],
     ['LWB','LB'],  ['RWB','RB'],
     ['LWB','LM'],  ['RWB','RM'],
-    ['ST','CF'],   ['CF','ST'],
+    ['ST','CF'],
   ]
-  if (NATURAL_SWAPS.some(([a, b]) => (pp === a && sp === b) || (pp === b && sp === a)))
-    return 'natural'
+  if (NATURAL_SWAPS.some(([a,b]) =>
+    (normPP === a && normSP === b) ||
+    (normPP === b && normSP === a)
+  )) return 'natural'
+
+  if (isDefender && slotAttacker) return 'tactical'
 
   const STRETCHED = [
     ['CB','CDM'],  ['CB','CM'],
@@ -168,10 +206,89 @@ function getPositionCompatibility(playerPos, slotPos) {
     ['LW','ST'],   ['RW','ST'],
     ['LM','LW'],   ['RM','RW'],
   ]
-  if (STRETCHED.some(([a, b]) => (pp === a && sp === b) || (pp === b && sp === a)))
-    return 'stretched'
+  if (STRETCHED.some(([a,b]) =>
+    (normPP === a && normSP === b) ||
+    (normPP === b && normSP === a)
+  )) return 'stretched'
 
   return 'tactical'
+}
+
+// Remap current XI to a new formation by position type, never by array index.
+// Priority: exact position match → natural compat → stretched → tactical.
+// Any player with no compatible slot in the new shape is returned as overflow
+// so the caller can push them to bench rather than leave them in a wrong slot.
+const THREE_BACK   = [
+  '3-5-2', '3-4-1-2', '3-4-2-1', '3-1-4-2', '3-4-3',
+  '5-3-2', '5-2-1-2', '5-2-2-1', '5-4-1 Flat', '5-4-1 Diamond'
+]
+const WB_POSITIONS = ['LB', 'RB', 'LWB', 'RWB']
+
+function remapToFormation(players, newFormation) {
+  const newSlots    = FORMATION_SLOT_ORDER[newFormation] ?? FORMATION_SLOT_ORDER['4-3-3']
+  const isThreeBack = THREE_BACK.includes(newFormation)
+  const pool        = players.map(p => ({ ...p }))
+  const used        = new Set()
+  const xi          = []
+
+  for (const slot of newSlots) {
+    let pick = null
+    for (const tier of ['exact', 'natural', 'stretched', 'tactical']) {
+      pick = pool.find(p => {
+        if (used.has(p.id)) return false
+        const pos = p.api_position || p.position || 'CM'
+        if (tier === 'exact') return pos === slot || p.assigned_slot === slot
+        // In 3-back formations wide-mid slots are wingback roles
+        if (tier === 'natural' && isThreeBack &&
+            (slot === 'LM' || slot === 'RM') && WB_POSITIONS.includes(pos)) return true
+        return getPositionCompatibility(pos, slot) === tier
+      })
+      if (pick) break
+    }
+    if (pick) {
+      used.add(pick.id)
+      const pos    = pick.api_position || pick.position || 'CM'
+      const compat = (isThreeBack && (slot === 'LM' || slot === 'RM') && WB_POSITIONS.includes(pos))
+        ? 'natural'
+        : getPositionCompatibility(pos, slot)
+      xi.push({ ...pick, assigned_slot: slot, outOfPosition: compat === 'natural' ? false : compat })
+    }
+  }
+
+  return { xi, overflow: pool.filter(p => !used.has(p.id)) }
+}
+
+// ── Plan helpers ──────────────────────────────────────────────────────────
+
+function relativeTime(isoString) {
+  if (!isoString) return 'unknown'
+  const diff = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`
+  return `${Math.floor(hrs / 24)} day${Math.floor(hrs / 24) === 1 ? '' : 's'} ago`
+}
+
+function planScenarioLine(scenario) {
+  if (!scenario) return null
+  const gs   = scenario.game_state
+  const diff = gs?.score_diff ?? 0
+  const status = diff < 0 ? 'Losing' : diff > 0 ? 'Winning' : 'Drawing'
+  return gs ? `${scenario.label} (${status} · ${gs.minute}')` : scenario.label
+}
+
+function readValidPlan(selectedTeamId) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('subhub_match_plan'))
+    if (!stored) return null
+    if (stored.team !== selectedTeamId) return null
+    if (!stored.xi || stored.xi.length !== 11) return null
+    const age = Date.now() - new Date(stored.savedAt).getTime()
+    if (age > 24 * 60 * 60 * 1000) return null
+    return stored
+  } catch { return null }
 }
 
 export default function Match() {
@@ -187,10 +304,15 @@ export default function Match() {
     [location.state]
   )
 
-  // Competition — overridden by route state when arriving from Planner
-  const [competition, setCompetition] = useState(
-    location.state?.competition || ''
-  )
+  // Competition — route state takes priority; falls back to plan's persisted value
+  const [competition, setCompetition] = useState(() => {
+    if (location.state?.competition) return location.state.competition
+    try {
+      const plan = JSON.parse(localStorage.getItem('subhub_match_plan'))
+      if (plan?.competition) return plan.competition
+    } catch {}
+    return ''
+  })
 
   // Competition format — drives ET/PK rules
   const compFormat = useMemo(() => getCompetitionFormat(competition), [competition])
@@ -247,14 +369,35 @@ export default function Match() {
 
   // Match controls
   const [formation,      setFormation]      = useState('4-3-3')
-  const [minute,         setMinute]         = useState(60)
+  const [minute,         setMinute]         = useState(0)
   const [ourScore,       setOurScore]       = useState(0)
   const [opponentScore,  setOpponentScore]  = useState(0)
   const [isHome,         setIsHome]         = useState(true)
-  const [opponentName,   setOpponentName]   = useState('Opponent')
-  const [intent,         setIntent]         = useState('tactical')
+  const [opponentName,   setOpponentName]   = useState(() => {
+    try {
+      const plan = JSON.parse(localStorage.getItem('subhub_match_plan'))
+      const dna  = plan?.opponentDNA
+      if (dna) return dna.fc26_club ?? dna.team ?? 'Opponent'
+    } catch {}
+    return 'Opponent'
+  })
+  const [scenario,       setScenario]       = useState('level')
   const [playstyle,      setPlaystyle]      = useState('high_press')
   const [injuredPlayers, setInjuredPlayers] = useState([])
+
+  // Full match plan (validated synchronously so it's available to the load effect)
+  const [matchPlan, setMatchPlan] = useState(() => {
+    const teamId = (() => {
+      try { return JSON.parse(localStorage.getItem('selectedTeam'))?.id } catch { return null }
+    })()
+    return readValidPlan(teamId)
+  })
+  const [showPlanPanel, setShowPlanPanel] = useState(false)
+
+  const keyPlayerNames = useMemo(() => {
+    const players = matchPlan?.key_players ?? []
+    return new Set(players.map(p => p.name))
+  }, [matchPlan])
 
   // Playstyle data + compatibility
   const [playstyles,    setPlaystyles]    = useState({})
@@ -284,7 +427,9 @@ export default function Match() {
   // Sub counter + undo
   const [subsUsed,        setSubsUsed]        = useState(0)
   const [subHistory,      setSubHistory]      = useState([]) // stack of { pitch, bench, subsUsed }
-  const [appliedSubNames, setAppliedSubNames] = useState(new Set())
+  // useRef — mutations never trigger re-renders and the value is never stale in
+  // closures. Only resetLineup() and the two sub-application paths may write to it.
+  const appliedSubNamesRef = useRef(new Set())
 
   // Bench expand / formation preview
   const [benchExpanded,     setBenchExpanded]     = useState(false)
@@ -328,6 +473,10 @@ export default function Match() {
           setBenchPlayers(confirmedBench ?? bench)
           setOriginalBench(confirmedBench ?? bench)
           setReservePlayers(confirmedReserves ?? reserves ?? [])
+        } else if (matchPlan) {
+          // No route-state XI — auto-load from Planner's saved match plan
+          loadSavedSquad(matchPlan)
+          setReservePlayers(reserves ?? [])
         } else {
           const xiWithEntry = xi.map(p => ({
             ...p,
@@ -355,6 +504,16 @@ export default function Match() {
     if (s.formation)   setFormation(s.formation)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Persist competition back to plan so future loads can read it ─────
+  useEffect(() => {
+    if (!competition) return
+    try {
+      const stored = JSON.parse(localStorage.getItem('subhub_match_plan') || 'null')
+      if (!stored?.team) return  // no plan — don't create one
+      localStorage.setItem('subhub_match_plan', JSON.stringify({ ...stored, competition }))
+    } catch {}
+  }, [competition])
 
   // ── Fetch playstyle catalogue once on mount ───────────────────────────
   useEffect(() => {
@@ -387,13 +546,20 @@ export default function Match() {
     const mod   = 1.0 - ((fc26s - 50) / 200)
     const wr    = player.work_rate_att || 'Medium'
     const wmod  = {High:1.12, Medium:1.0, Low:0.85}[wr] || 1.0
+    // slot-based stamina decay multipliers
+    const STAMINA_DECAY_MULTIPLIER = {
+      LWB: 1.25, RWB: 1.25,
+      LM:  1.15, RM:  1.15,
+      LB:  1.05, RB:  1.05,
+    }
+    const multiplier = STAMINA_DECAY_MULTIPLIER[player.assigned_slot] || 1.0
     // ET amplification: legs are burning in extra time
     let etMult = 1.0
     if (matchMinute > 90) {
       const etMins = matchMinute - 90
       etMult = etMins <= 15 ? 1.4 : 1.8
     }
-    return Math.max(0, Math.round((100 - base * mod * wmod * minuteOnPitch * etMult) * 10) / 10)
+    return Math.max(0, Math.round((100 - base * mod * wmod * minuteOnPitch * etMult * multiplier) * 10) / 10)
   }
 
   const liveXI = useMemo(() =>
@@ -414,25 +580,24 @@ export default function Match() {
 
   const formationSlots = FORMATIONS[formation]?.positions ?? FORMATIONS['4-3-3'].positions
 
-  // ── Formation change: re-assign slots via engine ─────────────────────
-  async function handleFormationChange(newFormation) {
+  // ── Formation change: visual slot relayout only ──────────────────────
+  // INVARIANT: never re-fetches or reinitialises pitchPlayers from the API.
+  // remapToFormation reassigns assigned_slot on existing player objects —
+  // the player set (including any live subs) is unchanged.
+  function handleFormationChange(newFormation) {
     if (newFormation === formation) return
     setFormation(newFormation)
     if (!pitchPlayers.length) return
-    try {
-      const res = await fetch('/api/assign-formation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ players: pitchPlayers, formation: newFormation }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data.players) && data.players.length === pitchPlayers.length) {
-          setPitchPlayers(data.players)
-        }
-      }
-    } catch {
-      // Backend unreachable — formation visual still switches, slot data stays as-is
+
+    const { xi, overflow } = remapToFormation(pitchPlayers, newFormation)
+    setPitchPlayers(xi)
+    if (overflow.length) {
+      // Players with no compatible slot in the new shape go to bench, not a random slot
+      setBenchPlayers(prev => [...overflow, ...prev])
+      showToast(
+        overflow.map(p => p.short_name || p.name.split(' ').pop()).join(', ')
+        + ` moved to bench`
+      )
     }
   }
 
@@ -492,7 +657,7 @@ export default function Match() {
       // Push undo snapshot before applying
       setSubHistory(prev => [...prev, { pitch: pitchPlayers, bench: benchPlayers, count: subsUsed }])
       setSubsUsed(c => c + 1)
-      if (pPlayer?.name) setAppliedSubNames(prev => new Set([...prev, pPlayer.name]))
+      if (pPlayer?.name) appliedSubNamesRef.current = new Set([...appliedSubNamesRef.current, pPlayer.name])
       // Track ET 6th-sub slot usage
       if (inET && subsUsed === 5 && !etSubUsed) setEtSubUsed(true)
     }
@@ -706,9 +871,6 @@ export default function Match() {
     const applied = doBenchToPitch(benchIdx, pitchIdx)
     if (!applied) return
 
-    // Track that this player has been subbed off so re-analyse excludes them
-    if (offName) setAppliedSubNames(prev => new Set([...prev, offName]))
-
     // Toast notification
     showToast(`${onName ?? 'Player'} replaces ${offName ?? 'Player'}`)
 
@@ -786,7 +948,7 @@ export default function Match() {
     setBenchPlayers(originalBench)
     setManualSwaps(new Set())
     setSubsUsed(0); setSubHistory([])
-    setAppliedSubNames(new Set())
+    appliedSubNamesRef.current = new Set()
     setUrgencyMode(null)
     setGroupedWindow(null)
     setHighOff(null); setHighOn(null)
@@ -805,6 +967,8 @@ export default function Match() {
     setRecLoading(true)
     setHighOff(null); setHighOn(null); setSubArrow(null)
 
+    // Fresh validated plan — team ID guard + 24h expiry baked into readValidPlan
+    const activePlan   = readValidPlan(selectedTeam?.id)
     const homeScoreVal = isHome ? ourScore : opponentScore
     const awayScoreVal = isHome ? opponentScore : ourScore
 
@@ -818,7 +982,7 @@ export default function Match() {
           // New canonical keys
           on_pitch:           liveXI,
           bench_available:    liveBench,
-          subbed_off:         [...appliedSubNames],
+          subbed_off:         [...appliedSubNamesRef.current],
           current_minute:     minute,
           current_score_home: homeScoreVal,
           current_score_away: awayScoreVal,
@@ -829,6 +993,9 @@ export default function Match() {
           competition:        competition || selectedTeam?.leagueCode || 'PL',
           pk_mode:            pkMode,
           straight_to_pks:    compFormat.straightToPKs,
+          intensity:          SCENARIO_INTENSITY_MAP[scenario],
+          opponent_playstyle: activePlan?.opponentDNA?.playstyle_key ?? null,
+          plan_formation:     activePlan?.formation ?? null,
         }),
       })
       const data = await res.json()
@@ -841,7 +1008,7 @@ export default function Match() {
         results = data
       }
     } catch {
-      results = computeClientRecs(liveXI, liveBench, intent, manualSwaps)
+      results = computeClientRecs(liveXI, liveBench, 'tactical', manualSwaps)
     }
 
     setRecs(results)
@@ -873,7 +1040,7 @@ export default function Match() {
 
     setRecLoading(false)
     setShowPanel(true)
-  }, [liveXI, liveBench, minute, ourScore, opponentScore, isHome, injuredPlayers, intent, playstyle, formation, manualSwaps, pitchPlayers, formationSlots, appliedSubNames, subsUsed, competition, compFormat, maxSubs, pkMode])
+  }, [liveXI, liveBench, minute, ourScore, opponentScore, isHome, injuredPlayers, scenario, playstyle, formation, manualSwaps, pitchPlayers, formationSlots, subsUsed, competition, compFormat, maxSubs, pkMode, matchPlan])
 
   // ── Keep handleAnalyse ref fresh (must be after the useCallback above) ──
   useEffect(() => { handleAnalyseRef.current = handleAnalyse }, [handleAnalyse])
@@ -993,6 +1160,93 @@ export default function Match() {
             )}
           </div>
 
+          {/* Plan Active indicator */}
+          {matchPlan && (() => {
+            // Decay style: 0-45 green, 46-65 amber, 66+ muted
+            const pillStyle = minute <= 45
+              ? { borderColor: 'rgba(0,255,135,0.45)', color: 'var(--green)',  opacity: 1    }
+              : minute <= 65
+              ? { borderColor: 'rgba(255,184,0,0.45)', color: 'var(--amber)', opacity: 0.85 }
+              : { borderColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.4)', opacity: 0.5 }
+
+            const dna      = matchPlan.opponentDNA
+            const scenario = matchPlan.scenario
+
+            const pillText = (() => {
+              const scenarioPart = scenario?.label ?? null
+              const oppPart      = dna?.team ?? null
+              if (scenarioPart && oppPart) return `Plan Active · ${scenarioPart} vs ${oppPart}`
+              if (scenarioPart)            return `Plan Active · ${scenarioPart}`
+              if (oppPart)                 return `Plan Active · vs ${oppPart}`
+              return 'Plan Active'
+            })()
+
+            return (
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="opp-context-pill"
+                  style={pillStyle}
+                  onClick={() => setShowPlanPanel(v => !v)}
+                  title="Pre-match plan"
+                >
+                  {pillText}
+                </button>
+
+                {showPlanPanel && (
+                  <div className="opp-context-dropdown" style={{ minWidth: 260 }}>
+                    <div style={{
+                      fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 11,
+                      letterSpacing: '0.12em', color: 'var(--green)',
+                      textTransform: 'uppercase', marginBottom: 10,
+                    }}>
+                      Pre-Match Plan
+                    </div>
+
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                      {[
+                        ['Scenario',  planScenarioLine(scenario) ?? '—'],
+                        ['Opponent',  dna?.team ?? '—'],
+                        ['DNA',       dna?.playstyle ?? '—'],
+                        ['Formation', matchPlan.formation ?? '—'],
+                        ['XI',        matchPlan.xi?.length === 11 ? 'Confirmed (11 players)' : '—'],
+                        ['Bench',     matchPlan.bench?.length > 0 ? `Confirmed (${matchPlan.bench.length} players)` : '—'],
+                        ['Saved',     relativeTime(matchPlan.savedAt)],
+                      ].map(([label, value]) => (
+                        <div key={label} className="opp-dna-row" style={{ marginBottom: 5 }}>
+                          <span className="opp-dna-label">{label}</span>
+                          <span className="opp-dna-value" style={{
+                            color: label === 'DNA' ? 'var(--green)' : 'var(--text)',
+                            fontSize: 11,
+                          }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        try { localStorage.removeItem('subhub_match_plan') } catch {}
+                        setMatchPlan(null)
+                        setShowPlanPanel(false)
+                      }}
+                      style={{
+                        marginTop: 10, width: '100%',
+                        background: 'rgba(255,61,61,0.07)',
+                        border: '1px solid rgba(255,61,61,0.25)',
+                        borderRadius: 4, color: '#ff6464',
+                        fontFamily: 'Rajdhani', fontWeight: 700,
+                        fontSize: 11, letterSpacing: '0.06em',
+                        cursor: 'pointer', padding: '4px 0',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Dismiss Plan
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Scoreline — OUR TEAM vs OPPONENT */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Our side */}
@@ -1027,6 +1281,21 @@ export default function Match() {
             </div>
           </div>
 
+          {/* Scenario pills */}
+          <div style={{ display: 'flex', gap: 3 }}>
+            {[
+              { value: 'chasing',    label: 'Chasing'    },
+              { value: 'protecting', label: 'Protecting' },
+              { value: 'level',      label: 'Level'      },
+            ].map(s => (
+              <button
+                key={s.value}
+                onClick={() => setScenario(s.value)}
+                className={`toggle-pill${scenario === s.value ? ' active' : ''}`}
+              >{s.label}</button>
+            ))}
+          </div>
+
           {/* Minute */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
@@ -1042,20 +1311,9 @@ export default function Match() {
                 )
               })()}
             </div>
-            <input type="range" min={1} max={sliderMax} value={minute}
+            <input type="range" min={0} max={sliderMax} value={minute}
               onChange={e => { setMinute(Number(e.target.value)); if (!matchStarted) setMatchStarted(true) }}
               style={{ width: 90, accentColor: inET ? 'var(--amber)' : pkMode ? '#ff3d3d' : 'var(--green)', cursor: 'pointer' }} />
-          </div>
-
-          {/* Intent */}
-          <div style={{ display: 'flex', gap: 3 }}>
-            {INTENTS.map(i => (
-              <button
-                key={i.value}
-                onClick={() => setIntent(i.value)}
-                className={`toggle-pill${intent === i.value ? ' active' : ''}`}
-              >{i.label}</button>
-            ))}
           </div>
 
           {/* Playstyle selector */}
@@ -1072,22 +1330,52 @@ export default function Match() {
             ))}
           </div>
 
-          {/* Formation toggle + preview */}
-          <div style={{ display: 'flex', gap: 3 }}>
-            {FORMATION_KEYS.map(f => (
-              <button
-                key={f}
-                onClick={() => handleFormationChange(f)}
-                className={`toggle-pill${formation === f ? ' active' : ''}`}
-                onMouseEnter={e => {
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  setPreviewFormation(f)
-                  setPreviewPos({ x: rect.left, y: rect.bottom + 8 })
-                }}
-                onMouseLeave={() => setPreviewFormation(null)}
-              >{f}</button>
-            ))}
-          </div>
+          {/* Formation dropdown */}
+          <select
+            value={formation}
+            onChange={e => handleFormationChange(e.target.value)}
+            style={{
+              background: '#1a1a1a',
+              color: '#c8963e',
+              border: '1px solid #c8963e',
+              borderRadius: 4,
+              padding: '4px 8px',
+              fontFamily: 'Rajdhani',
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <optgroup label="4-BACK">
+              <option>4-3-3</option>
+              <option>4-4-2</option>
+              <option>4-2-3-1</option>
+              <option>4-2-3-1 Wide</option>
+              <option>4-2-3-1 Narrow</option>
+              <option>4-1-2-1-2 Wide</option>
+              <option>4-1-2-1-2 Narrow</option>
+              <option>4-4-1-1</option>
+              <option>4-2-2-2</option>
+              <option>4-3-1-2</option>
+              <option>4-3-2-1</option>
+              <option>4-5-1</option>
+            </optgroup>
+            <optgroup label="3-BACK">
+              <option>3-4-1-2</option>
+              <option>3-4-2-1</option>
+              <option>3-1-4-2</option>
+              <option>3-4-3</option>
+              <option>3-5-2</option>
+            </optgroup>
+            <optgroup label="5-BACK">
+              <option>5-2-1-2</option>
+              <option>5-2-2-1</option>
+              <option>5-3-2</option>
+              <option>5-4-1 Flat</option>
+              <option>5-4-1 Diamond</option>
+            </optgroup>
+          </select>
 
           {/* Compatibility indicator */}
           {compatibility && (
@@ -1282,21 +1570,17 @@ export default function Match() {
             }}>
               {/* Stale data disclaimer (Rule 7) */}
               {showDisclaimer && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.25)',
-                  borderRadius: 6, padding: '5px 10px', flexShrink: 0,
-                }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <span style={{
-                    fontSize: 10, color: '#ffb800', fontFamily: 'Rajdhani', fontWeight: 600,
-                    letterSpacing: '0.04em',
+                    fontSize: 11, color: 'var(--muted)', fontFamily: 'Rajdhani',
+                    opacity: 0.4, letterSpacing: '0.03em',
                   }}>
-                    ⚠ Squad data from football-data.org. Transfers after July 2025 may not be reflected.
+                    Squad data from football-data.org. Transfers after July 2025 may not be reflected.
                   </span>
                   <button onClick={dismissDisclaimer} style={{
-                    background: 'none', border: 'none', color: '#ffb800',
-                    cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 0 0 8px',
-                    opacity: 0.7,
+                    background: 'none', border: 'none', color: 'var(--muted)',
+                    cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: 0,
+                    opacity: 0.4,
                   }}>✕</button>
                 </div>
               )}
@@ -1317,7 +1601,9 @@ export default function Match() {
                 labelColour="var(--card-gold-top)"
                 highlightId={highlightOn}
                 onSelect={p => setHighOn(prev => prev === p.id ? null : p.id)}
-                subbedOffNames={appliedSubNames}
+                subbedOffNames={appliedSubNamesRef.current}
+                keyPlayerNames={keyPlayerNames}
+                keyPlayerTooltip={`Key player vs ${opponentName}`}
                 collapsible
               />
               {/* Squad / reserves — collapsible, hover "+" to promote.

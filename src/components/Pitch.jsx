@@ -5,7 +5,6 @@
  */
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import PlayerCard from './PlayerCard'
-import FormationLines from './FormationLines'
 
 /**
  * Props:
@@ -32,11 +31,6 @@ export default function Pitch({
     player: pitchPlayers[i] ?? null,
   }))
 
-  // Pass highlighted slot to FormationLines when sub panel is open
-  const highlightSlots = highlightOffId
-    ? positioned.filter(p => p.player?.id === highlightOffId).map(p => p.slot)
-    : []
-
   return (
     <div style={{
       position: 'relative', width: '100%', flex: 1, minHeight: 420,
@@ -47,9 +41,6 @@ export default function Pitch({
       <PitchStripes />
       <StadiumGlow />
       <PitchMarkings />
-
-      {/* Formation connection lines — chemistry-colored */}
-      <FormationLines players={positioned} highlightSlots={highlightSlots} />
 
       {/* Sub arrow */}
       {subArrow && <SubArrow {...subArrow} />}

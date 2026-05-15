@@ -22,8 +22,8 @@ export default function App() {
           <Route path="/"               element={<Home />} />
           <Route path="/league/:code"   element={<League />} />
           <Route path="/squad/:teamId"  element={<Squad />} />
-          <Route path="/match/:teamId?" element={<Match />} />
           <Route path="/planner"        element={<Planner />} />
+          <Route path="/match/:teamId?" element={<Match />} />
         </Routes>
       </div>
     </TeamProvider>

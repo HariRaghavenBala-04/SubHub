@@ -89,30 +89,259 @@ const BUILDER_SLOTS = {
     { key: 'RM_0',  slot: 'RM',  left: '93%', top: '51%' },
     { key: 'ST_0',  slot: 'ST',  left: '50%', top: '22%' },
   ],
+  '4-2-3-1 Wide': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LDM_0',  slot: 'LDM',  left: '35%', top: '55%' },
+    { key: 'RDM_0',  slot: 'RDM',  left: '65%', top: '55%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '30%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '32%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '30%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-2-3-1 Narrow': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LDM_0',  slot: 'LDM',  left: '35%', top: '55%' },
+    { key: 'RDM_0',  slot: 'RDM',  left: '65%', top: '55%' },
+    { key: 'LCAM_0', slot: 'LCAM', left: '30%', top: '32%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '35%' },
+    { key: 'RCAM_0', slot: 'RCAM', left: '70%', top: '32%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-1-2-1-2 Wide': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '58%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '42%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '42%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-1-2-1-2 Narrow': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '58%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '32%', top: '45%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '68%', top: '45%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-4-1-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '45%' },
+    { key: 'CF_0',   slot: 'CF',   left: '50%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '4-2-2-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCDM_0', slot: 'LCDM', left: '35%', top: '55%' },
+    { key: 'RCDM_0', slot: 'RCDM', left: '65%', top: '55%' },
+    { key: 'LCAM_0', slot: 'LCAM', left: '30%', top: '30%' },
+    { key: 'RCAM_0', slot: 'RCAM', left: '70%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-3-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '30%', top: '50%' },
+    { key: 'CM_0',   slot: 'CM',   left: '50%', top: '54%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '70%', top: '50%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '32%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '4-3-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LB_0',   slot: 'LB',   left: '15%', top: '70%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '38%', top: '72%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '62%', top: '72%' },
+    { key: 'RB_0',   slot: 'RB',   left: '85%', top: '70%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '30%', top: '50%' },
+    { key: 'CM_0',   slot: 'CM',   left: '50%', top: '54%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '70%', top: '50%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '28%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
+  '3-4-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '45%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '28%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '3-4-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '45%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '45%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '25%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '25%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '10%' },
+  ],
+  '3-1-4-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '60%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '40%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '35%', top: '42%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '65%', top: '42%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '40%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '3-4-3': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '25%', top: '75%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '78%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '75%', top: '75%' },
+    { key: 'LM_0',   slot: 'LM',   left: '12%', top: '48%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '50%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '50%' },
+    { key: 'RM_0',   slot: 'RM',   left: '88%', top: '48%' },
+    { key: 'LW_0',   slot: 'LW',   left: '20%', top: '18%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+    { key: 'RW_0',   slot: 'RW',   left: '80%', top: '18%' },
+  ],
+  '5-2-1-2': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '30%' },
+    { key: 'LST_0',  slot: 'LST',  left: '40%', top: '12%' },
+    { key: 'RST_0',  slot: 'RST',  left: '60%', top: '12%' },
+  ],
+  '5-2-2-1': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '48%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '48%' },
+    { key: 'LCF_0',  slot: 'LCF',  left: '35%', top: '25%' },
+    { key: 'RCF_0',  slot: 'RCF',  left: '65%', top: '25%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '10%' },
+  ],
+  '5-4-1 Flat': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '42%' },
+    { key: 'LCM_0',  slot: 'LCM',  left: '38%', top: '45%' },
+    { key: 'RCM_0',  slot: 'RCM',  left: '62%', top: '45%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '42%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '15%' },
+  ],
+  '5-4-1 Diamond': [
+    { key: 'GK_0',   slot: 'GK',   left: '50%', top: '90%' },
+    { key: 'LWB_0',  slot: 'LWB',  left: '12%', top: '65%' },
+    { key: 'LCB_0',  slot: 'LCB',  left: '32%', top: '72%' },
+    { key: 'CB_0',   slot: 'CB',   left: '50%', top: '75%' },
+    { key: 'RCB_0',  slot: 'RCB',  left: '68%', top: '72%' },
+    { key: 'RWB_0',  slot: 'RWB',  left: '88%', top: '65%' },
+    { key: 'CDM_0',  slot: 'CDM',  left: '50%', top: '55%' },
+    { key: 'LM_0',   slot: 'LM',   left: '15%', top: '40%' },
+    { key: 'RM_0',   slot: 'RM',   left: '85%', top: '40%' },
+    { key: 'CAM_0',  slot: 'CAM',  left: '50%', top: '28%' },
+    { key: 'ST_0',   slot: 'ST',   left: '50%', top: '12%' },
+  ],
 }
 
 // ── Position compatibility (mirrors Planner) ──────────────────────────────────
 
-function isCompatibleForSlot(player, slotType) {
+function isCompatibleForSlot(player, slotType, formation) {
   const pos = player.api_position || player.position || 'CM'
+  // In 3-back formations the wide mid slots are wing-back roles, not winger roles
+  if ((slotType === 'LM' || slotType === 'RM') &&
+      ([
+        '3-5-2','3-4-1-2','3-4-2-1','3-1-4-2','3-4-3',
+        '5-3-2','5-2-1-2','5-2-2-1','5-4-1 Flat','5-4-1 Diamond'
+      ].includes(formation)) &&
+      ['LB', 'RB', 'LWB', 'RWB'].includes(pos)) return true
   const COMPAT = {
     GK:  ['GK'],
-    LB:  ['LB', 'LWB', 'CB', 'RB'],
-    RB:  ['RB', 'RWB', 'CB', 'LB'],
+    LB:  ['LB', 'LWB', 'CB', 'RB', 'RWB'],
+    RB:  ['RB', 'RWB', 'CB', 'LB', 'LWB'],
     CB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
-    LWB: ['LWB', 'LB', 'LM', 'RWB'],
-    RWB: ['RWB', 'RB', 'RM', 'LWB'],
+    LWB: ['LWB', 'LB', 'RB', 'LM', 'CM', 'CDM', 'RWB'],
+    RWB: ['RWB', 'RB', 'LB', 'RM', 'CM', 'CDM', 'LWB'],
     CDM: ['CDM', 'CM', 'CB', 'CAM'],
     CM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
-    LM:  ['LM', 'LW', 'CM', 'LWB', 'RM'],
-    RM:  ['RM', 'RW', 'CM', 'RWB', 'LM'],
+    LM:  ['LM', 'LW', 'CM', 'CDM', 'LWB', 'RM'],
+    RM:  ['RM', 'RW', 'CM', 'CDM', 'RWB', 'LM'],
     CAM: ['CAM', 'CM', 'LW', 'RW', 'CDM', 'ST', 'CF'],
     LAM: ['LAM', 'CAM', 'LW', 'CM'],
     RAM: ['RAM', 'CAM', 'RW', 'CM'],
     LW:  ['LW', 'LM', 'CAM', 'ST', 'RW'],
     RW:  ['RW', 'RM', 'CAM', 'ST', 'LW'],
     ST:  ['ST', 'CF', 'LW', 'RW', 'CAM'],
-    CF:  ['CF', 'ST', 'CAM', 'LW', 'RW'],
+    CF:   ['CF', 'ST', 'CAM', 'LW', 'RW'],
+    LCB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
+    RCB:  ['CB', 'LB', 'RB', 'CDM', 'CM'],
+    LCM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
+    RCM:  ['CM', 'CDM', 'CAM', 'LM', 'RM'],
+    LDM:  ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    RDM:  ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    LCAM: ['CAM', 'CM', 'CDM', 'LM', 'RM', 'LW', 'RW'],
+    RCAM: ['CAM', 'CM', 'CDM', 'LM', 'RM', 'LW', 'RW'],
+    LCDM: ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    RCDM: ['CDM', 'CM', 'CB', 'LB', 'RB'],
+    LCF:  ['CF', 'ST', 'CAM', 'LW', 'RW', 'SS'],
+    RCF:  ['CF', 'ST', 'CAM', 'LW', 'RW', 'SS'],
+    LST:  ['ST', 'CF', 'LW', 'RW', 'CAM', 'SS'],
+    RST:  ['ST', 'CF', 'LW', 'RW', 'CAM', 'SS'],
   }
   if (slotType === 'GK') return pos === 'GK'
   if (pos === 'GK') return slotType === 'GK'
@@ -239,7 +468,7 @@ export default function Squad() {
     if (!draggedInfo) return
     const { player, from, key: srcKey, benchIdx: srcBenchIdx } = draggedInfo
 
-    if (!isCompatibleForSlot(player, slotDef.slot)) {
+    if (!isCompatibleForSlot(player, slotDef.slot, builderFormation)) {
       flashInvalidSlot(slotDef.key)
       showToast(`${player.short_name || player.name} can't play ${slotDef.slot}`)
       setDraggedInfo(null)
@@ -362,16 +591,7 @@ export default function Squad() {
     const takenIds          = new Set([...placedXIIds, ...benchIds])
     const confirmedReserves = allPlayers.filter(p => !takenIds.has(p.id))
 
-    navigate(`/match/${teamId}`, {
-      state: {
-        confirmedXI,
-        confirmedBench,
-        confirmedReserves,
-        formation: builderFormation,
-        teamId,
-        league,
-      },
-    })
+    navigate('/planner')
   }
 
   // ── Filtered squad list ──────────────────────────────────────────────────────
@@ -457,13 +677,24 @@ export default function Squad() {
       <div className="builder-controls" style={{ marginBottom: 0, flexShrink: 0 }}>
         <div className="builder-formation-label">FORMATION</div>
         <div className="builder-formation-pills">
-          {FORMATION_KEYS.map(f => (
-            <button
-              key={f}
-              className={`toggle-pill${builderFormation === f ? ' active' : ''}`}
-              onClick={() => handleFormationChange(f)}
-            >{f}</button>
-          ))}
+          <div className="formation-pill-group">
+            <span className="formation-pill-label">4-BACK</span>
+            {['4-3-3','4-4-2','4-2-3-1 Wide','4-2-3-1 Narrow','4-1-2-1-2 Wide','4-1-2-1-2 Narrow','4-4-1-1','4-2-2-2','4-3-1-2','4-3-2-1','4-5-1'].map(f => (
+              <button key={f} className={`toggle-pill${builderFormation === f ? ' active' : ''}`} onClick={() => handleFormationChange(f)}>{f}</button>
+            ))}
+          </div>
+          <div className="formation-pill-group">
+            <span className="formation-pill-label">3-BACK</span>
+            {['3-4-1-2','3-4-2-1','3-1-4-2','3-4-3','3-5-2'].map(f => (
+              <button key={f} className={`toggle-pill${builderFormation === f ? ' active' : ''}`} onClick={() => handleFormationChange(f)}>{f}</button>
+            ))}
+          </div>
+          <div className="formation-pill-group">
+            <span className="formation-pill-label">5-BACK</span>
+            {['5-2-1-2','5-2-2-1','5-3-2','5-4-1 Flat','5-4-1 Diamond'].map(f => (
+              <button key={f} className={`toggle-pill${builderFormation === f ? ' active' : ''}`} onClick={() => handleFormationChange(f)}>{f}</button>
+            ))}
+          </div>
         </div>
         <button className="builder-clear-btn" onClick={() => setBuiltXI({})}>
           Clear XI

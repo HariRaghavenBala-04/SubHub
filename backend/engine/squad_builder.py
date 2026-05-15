@@ -346,7 +346,7 @@ def _names_compatible(api_norm: str, fc26_norm: str) -> bool:
 def _parse_rating(val) -> int:
     """Parse '86+3' → 86, NaN → 60."""
     try:
-        return int(str(val).split("+")[0].split("-")[0].strip())
+        return int(float(str(val).split("+")[0].split("-")[0].strip()))
     except Exception:
         return 60
 
@@ -814,6 +814,8 @@ _POSITION_GROUPS_FC26: dict[str, list[str]] = {
 _CLUB_OVERRIDES: dict[str, str] = {
     "FC Internazionale Milano":       "Inter",
     "Internazionale":                 "Inter",
+    "Inter Milan":                    "Inter",
+    "Inter Milano":                   "Inter",
     "Wolverhampton Wanderers FC":     "Wolves",
     "Nottingham Forest FC":           "Nottingham Forest",
     "Brighton & Hove Albion FC":      "Brighton & Hove Albion",
@@ -907,7 +909,7 @@ def build_player_from_fc26_row(row) -> dict:
 
     def _int(val, default: int = 65) -> int:
         try:
-            return int(str(val).split("+")[0].split("-")[0].strip())
+            return int(float(str(val).split("+")[0].split("-")[0].strip()))
         except Exception:
             return default
 

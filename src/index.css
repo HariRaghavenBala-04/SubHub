@@ -1594,6 +1594,19 @@ h1, h2, h3, h4, h5, h6 {
   margin-left: 8px;
 }
 
+.builder-doubtful-warning {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffb800;
+  background: rgba(255,184,0,0.08);
+  border: 1px solid rgba(255,184,0,0.35);
+  border-radius: 5px;
+  padding: 8px 14px;
+}
+
 /* Builder layout */
 .builder-layout {
   display: flex;
@@ -1874,6 +1887,50 @@ h1, h2, h3, h4, h5, h6 {
 
 .bsl-player-row:active { cursor: grabbing; }
 
+.bsl-player-row.bsl-blocked {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.bsl-player-row.bsl-blocked:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.bsl-player-row.bsl-doubtful {
+  border-color: rgba(255,184,0,0.3);
+  background: rgba(255,184,0,0.04);
+}
+
+.bsl-player-row.bsl-doubtful:hover {
+  border-color: rgba(255,184,0,0.5);
+  background: rgba(255,184,0,0.08);
+}
+
+.bsl-avail-badge {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.bsl-badge-blocked {
+  color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.bsl-badge-doubtful {
+  color: #ffb800;
+  background: rgba(255,184,0,0.1);
+  border: 1px solid rgba(255,184,0,0.35);
+}
+
 .bsl-pos {
   font-size: 8px;
   font-weight: 800;
@@ -1905,6 +1962,166 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Rajdhani', sans-serif;
   color: rgba(200,150,60,0.7);
   flex-shrink: 0;
+}
+
+/* ── Builder Bench Selection ──────────────────────────────────────────────── */
+
+.builder-bench-section {
+  margin-top: 20px;
+  border-top: 1px solid rgba(200,150,60,0.2);
+  padding-top: 16px;
+}
+
+.builder-bench-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.builder-bench-title {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.1em;
+  color: #c8963e;
+}
+
+.builder-bench-count {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Rajdhani', sans-serif;
+  color: rgba(200,150,60,0.6);
+  background: rgba(200,150,60,0.08);
+  border: 1px solid rgba(200,150,60,0.25);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+.builder-bench-hint {
+  font-size: 10px;
+  font-family: 'Rajdhani', sans-serif;
+  color: rgba(245,230,200,0.35);
+  letter-spacing: 0.04em;
+}
+
+.builder-bench-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.builder-bench-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(200,150,60,0.12);
+  border: 1px solid rgba(200,150,60,0.4);
+  border-radius: 4px;
+  padding: 3px 7px 3px 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.builder-bench-chip:hover {
+  background: rgba(200,80,60,0.15);
+  border-color: rgba(200,80,60,0.5);
+}
+
+.bbc-pos {
+  font-size: 8px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+  color: #080c10;
+  background: var(--comp-accent, linear-gradient(135deg, #f0c060, #c8963c));
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.bbc-name {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Rajdhani', sans-serif;
+  color: #f5e6c8;
+}
+
+.bbc-remove {
+  font-size: 12px;
+  color: rgba(200,80,60,0.7);
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.builder-bench-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.builder-bench-pool::-webkit-scrollbar { width: 3px; }
+.builder-bench-pool::-webkit-scrollbar-track { background: transparent; }
+.builder-bench-pool::-webkit-scrollbar-thumb { background: rgba(200,150,60,0.2); border-radius: 2px; }
+
+.builder-bench-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(200,150,60,0.15);
+  background: rgba(255,255,255,0.02);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.builder-bench-row:hover {
+  background: rgba(200,150,60,0.08);
+  border-color: rgba(200,150,60,0.35);
+}
+
+.builder-bench-row.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.bbl-pos {
+  font-size: 8px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+  color: #080c10;
+  background: rgba(200,150,60,0.5);
+  padding: 1px 4px;
+  border-radius: 2px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.bbl-name {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Rajdhani', sans-serif;
+  color: rgba(245,230,200,0.8);
+  white-space: nowrap;
+}
+
+.bbl-ovr {
+  font-size: 10px;
+  font-weight: 800;
+  font-family: 'Rajdhani', sans-serif;
+  color: rgba(200,150,60,0.6);
+}
+
+.bbl-add {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(200,150,60,0.5);
+  line-height: 1;
+  margin-left: 2px;
 }
 
 /* ── Competition Theme Engine ─────────────────────────────────────────────── */
@@ -2011,11 +2228,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   PLANNER SPRINT 4 — SUB DOCTRINE
+   PLANNER SPRINT 4 — MATCH STRATEGY HUB
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Tab wrapper ── */
-.tab-doctrine {
+.tab-strategy {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -2023,7 +2240,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Header ── */
-.doctrine-header {
+.strategy-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2031,7 +2248,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-wrap: wrap;
 }
 
-.doctrine-title h2 {
+.strategy-title h2 {
   font-family: 'Rajdhani', sans-serif;
   font-size: 20px;
   font-weight: 800;
@@ -2041,26 +2258,26 @@ h1, h2, h3, h4, h5, h6 {
   transition: color 0.4s ease;
 }
 
-.doctrine-title p {
+.strategy-title p {
   font-size: 12px;
   color: rgba(255,255,255,0.35);
   margin: 0;
   line-height: 1.5;
 }
 
-.doctrine-title strong {
+.strategy-title strong {
   color: rgba(255,255,255,0.6);
   font-weight: 700;
 }
 
 /* ── Slot cards stack ── */
-.doctrine-slots {
+.strategy-slots {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.doctrine-slot-card {
+.strategy-slot-card {
   background: rgba(255,255,255,0.02);
   border: 1px solid var(--comp-pillBorder, rgba(200,150,60,0.3));
   border-radius: 8px;
@@ -2268,14 +2485,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Scenario Preview ── */
-.doctrine-preview {
+.strategy-preview {
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 8px;
   overflow: hidden;
 }
 
-.doctrine-preview-header {
+.strategy-preview-header {
   padding: 10px 16px;
   font-family: 'Rajdhani', sans-serif;
   font-size: 9px;
@@ -2370,7 +2587,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Export button ── */
-.doctrine-export-btn {
+.strategy-export-btn {
   width: 100%;
   padding: 12px;
   background: rgba(255,255,255,0.03);
@@ -2386,7 +2603,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: all 0.2s ease;
 }
 
-.doctrine-export-btn:hover {
+.strategy-export-btn:hover {
   background: var(--comp-pillActive, rgba(200,150,60,0.08));
   box-shadow: 0 0 16px var(--comp-cardGlow, rgba(200,150,60,0.2));
 }
@@ -2394,6 +2611,388 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Print-only content ── */
 .tactical-briefing-print {
   display: none;
+}
+
+/* ── Opponent Playstyle Selector ── */
+
+.opp-playstyle-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.opp-playstyle-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.opp-playstyle-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.opp-pill {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.opp-pill:hover {
+  border-color: rgba(255,255,255,0.28);
+  color: rgba(255,255,255,0.75);
+}
+
+.opp-pill.active {
+  border-color: var(--comp-accent, rgba(255,255,255,0.5));
+  color: var(--comp-accent, #fff);
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── Opponent DNA Card ── */
+
+.opp-dna-card {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,255,135,0.18);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-width: 260px;
+}
+
+.opp-dna-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.opp-dna-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--green);
+  text-transform: uppercase;
+}
+
+.opp-dna-override-toggle {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,184,0,0.35);
+  background: transparent;
+  color: var(--amber);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.opp-dna-override-toggle:hover {
+  background: rgba(255,184,0,0.08);
+}
+
+.opp-dna-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.opp-dna-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.opp-dna-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.04em;
+}
+
+.opp-dna-value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.opp-dna-playstyle {
+  color: var(--green);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Opponent Context Pill (Match Console) ── */
+
+.opp-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--green);
+  background: rgba(0,255,135,0.07);
+  border: 1px solid rgba(0,255,135,0.22);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.opp-context-pill:hover {
+  background: rgba(0,255,135,0.12);
+}
+
+.opp-context-dropdown {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 200;
+  background: #181818;
+  border: 1px solid rgba(0,255,135,0.22);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-width: 240px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+/* ── Scenario Branch Cards ── */
+
+.scenario-branch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .scenario-branch-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scenario-branch-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.scenario-branch-card:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.scenario-branch-card.active {
+  background: rgba(255,255,255,0.03);
+}
+
+.sbc-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 10px;
+  background: rgba(0,0,0,0.28);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: border-bottom-color 0.18s ease;
+}
+
+.sbc-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.sbc-context {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.28);
+  text-transform: uppercase;
+}
+
+.sbc-body {
+  padding: 12px 14px 14px;
+}
+
+.sbc-desc {
+  margin: 0;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(245,230,200,0.55);
+  line-height: 1.55;
+}
+
+/* ── Recommendations Placeholder Panel ── */
+
+.scenario-branch-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  background: rgba(255,255,255,0.015);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+
+.sbp-placeholder {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.2);
+  text-transform: uppercase;
+}
+
+.scenario-branch-panel.has-recs {
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: auto;
+  padding: 12px;
+}
+
+.sbp-error {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255,80,80,0.7);
+  text-transform: uppercase;
+}
+
+.sbp-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sbp-rec-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.sbr-rank {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  min-width: 30px;
+}
+
+.sbr-player {
+  flex: 1;
+  min-width: 0;
+}
+
+.sbr-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbr-pos {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.sbr-attrs {
+  display: flex;
+  gap: 16px;
+}
+
+.sbr-attr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.sbr-attr-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sbr-attr-value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.sbr-confidence {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 60px;
+}
+
+.sbr-conf-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+}
+
+.sbr-conf-value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.65);
+  letter-spacing: 0.02em;
 }
 
 /* ── @media print ── */

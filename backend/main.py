@@ -16,8 +16,9 @@ from dotenv import load_dotenv
 from .engine.recommender      import get_recommendations
 from .engine.scenario_planner import plan_scenarios, injury_response
 from .engine.fc26_loader      import get_player_attributes, get_position_profile, get_player_versatility
-from .engine.squad_builder    import build_squad, build_squad_fc26
+from .engine.squad_builder    import build_squad, build_squad_fc26, FC26_DF, find_fc26_club_name
 from .engine.formation_slots  import reassign_for_formation, FORMATION_SLOTS
+from .engine.opponent_dna     import derive_opponent_dna
 
 load_dotenv()
 
@@ -135,6 +136,7 @@ class RecommendRequest(BaseModel):
     manager_intent: str = "tactical_change"
     days_since_last_match: int | None = None
     injured_players: list[str] = []
+    intensity: str = ""
 
 
 class InjuryRequest(BaseModel):
@@ -337,6 +339,10 @@ async def recommend(request: Request):
     competition     = body.get("competition", "")
     pk_mode         = body.get("pk_mode", False)
     straight_to_pks = body.get("straight_to_pks", False)
+    intensity          = body.get("intensity", "")
+    opponent_playstyle = body.get("opponent_playstyle") or None
+    plan_scenario      = body.get("plan_scenario") or None
+    plan_formation     = body.get("plan_formation") or None
 
     print(f"[Rec] {cur_minute}' | {score_home}-{score_away} | "
           f"playstyle={body.get('playstyle')} formation={body.get('formation')} "
@@ -356,6 +362,10 @@ async def recommend(request: Request):
         competition         = competition,
         pk_mode             = pk_mode,
         straight_to_pks     = straight_to_pks,
+        intensity           = intensity,
+        opponent_playstyle  = opponent_playstyle,
+        plan_scenario       = plan_scenario,
+        plan_formation      = plan_formation,
     )
 
 
@@ -401,6 +411,176 @@ async def scenarios(req: ScenarioRequest):
         minute=req.minute,
         days_since_last_match=req.days_since_last_match,
     )
+
+
+@app.get("/api/opponent-dna")
+async def opponent_dna(team: str):
+    """
+    GET /api/opponent-dna?team={team_name}
+    Returns a tactical DNA profile derived from FC26 squad data.
+    Results are cached in memory — the CSV does not change at runtime.
+    """
+    try:
+        profile = derive_opponent_dna(team)
+        return profile
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/key-matchup-players")
+async def key_matchup_players(team: str, opponent: str):
+    """
+    GET /api/key-matchup-players?team={fc26_club}&opponent={fc26_club}
+    Cross-references opponent DNA thresholds against the user's squad.
+    Returns up to 3 key players with name, position, overall, reason.
+    """
+    def _i(val, default: int = 65) -> int:
+        try:
+            return int(float(str(val).split("+")[0].split("-")[0].strip()))
+        except Exception:
+            return default
+
+    user_fc26 = find_fc26_club_name(team)
+    if not user_fc26:
+        raise HTTPException(404, f"Team not found in FC26: {team!r}")
+
+    user_df = FC26_DF[FC26_DF["club_name"] == user_fc26].copy()
+    if user_df.empty:
+        raise HTTPException(404, f"No squad data for {user_fc26!r}")
+
+    try:
+        dna = derive_opponent_dna(opponent)
+    except ValueError:
+        raise HTTPException(404, f"Opponent DNA unavailable for {opponent!r}")
+
+    results: list[dict] = []
+    used: set[str] = set()
+
+    def _add(pool_df, score_col: str, n: int, reason: str) -> None:
+        pool = pool_df.copy()
+        pool["_s"] = pool[score_col].apply(lambda x: _i(x))
+        for _, row in pool.sort_values("_s", ascending=False).iterrows():
+            if len(results) >= 3 or n <= 0:
+                break
+            name = str(row.get("short_name") or row.get("long_name") or "").strip()
+            if not name or name in used:
+                continue
+            used.add(name)
+            pos_raw  = str(row.get("player_positions", ""))
+            position = pos_raw.split(",")[0].strip() if pos_raw else "?"
+            results.append({
+                "name":     name,
+                "position": position,
+                "overall":  _i(row.get("overall"), 70),
+                "reason":   reason,
+            })
+            n -= 1
+
+    def _pos_filter(*codes):
+        mask = user_df["player_positions"].apply(
+            lambda p: any(c in str(p).upper() for c in codes)
+        )
+        return user_df[mask]
+
+    pace_threat        = _i(dna.get("pace_threat",        0))
+    press_intensity    = _i(dna.get("press_intensity",    0))
+    physical_dominance = _i(dna.get("physical_dominance", 0))
+    creative_threat    = _i(dna.get("creative_threat",    0))
+
+    if pace_threat > 65:
+        _add(_pos_filter("CB", "LB", "RB", "LWB", "RWB"), "pace", 2,
+             "Pace to match their threat in behind")
+        _add(_pos_filter("ST", "LW", "RW", "CF"), "pace", 1,
+             "Pace to match their threat in behind")
+
+    if press_intensity > 60 and len(results) < 3:
+        _add(user_df, "mentality_composure", 3 - len(results),
+             "Composure to beat their high press")
+
+    if physical_dominance > 65 and len(results) < 3:
+        user_df["_phys"] = user_df.apply(
+            lambda r: (_i(r.get("power_jumping")) + _i(r.get("power_strength"))) // 2, axis=1
+        )
+        _add(user_df, "_phys", 3 - len(results),
+             "Aerial strength against their physicality")
+
+    if creative_threat > 65 and len(results) < 3:
+        _add(_pos_filter("CDM", "CM", "CB"), "defending_marking_awareness",
+             3 - len(results), "Defensive awareness to nullify their creativity")
+
+    return results[:3]
+
+
+# ── Competition → FC26 league name ────────────────────────────────────────────
+_COMP_TO_LEAGUE: dict[str, str] = {
+    "premier_league": "Premier League",
+    "bundesliga":     "Bundesliga",
+    "la_liga":        "La Liga",
+    "serie_a":        "Serie A",
+    "ligue_1":        "Ligue 1",
+}
+
+# 2024/25 UCL participants — teams outside the 7 target leagues will return
+# DNA unavailable but are included for completeness.
+_UCL_2024_25: list[str] = sorted([
+    "Arsenal", "Aston Villa", "Manchester City", "Liverpool",
+    "Bayern München", "Bayer 04 Leverkusen", "Borussia Dortmund", "RB Leipzig", "VfB Stuttgart",
+    "Real Madrid", "Atlético Madrid", "Barcelona", "Girona",
+    "Inter", "Juventus", "Atalanta", "AC Milan", "Bologna",
+    "Paris SG", "Monaco", "Stade Brest",
+    "Benfica", "Sporting CP",
+    "PSV Eindhoven", "Feyenoord",
+    "Celtic", "Club Brugge", "Red Bull Salzburg", "Young Boys",
+    "Slavia Praha", "Dinamo Zagreb", "Sparta Praha",
+    "Crvena zvezda", "Sturm Graz", "Bodo/Glimt", "Shakhtar Donetsk",
+])
+
+_UEL_2024_25: list[str] = sorted([
+    "Manchester United", "Tottenham Hotspur",
+    "Eintracht Frankfurt", "Hoffenheim",
+    "Athletic Club", "Real Sociedad", "Villarreal",
+    "Lazio", "Roma", "Napoli", "Fiorentina",
+    "Lyon", "Nice", "Lens",
+    "Porto", "Braga",
+    "Ajax", "AZ Alkmaar", "Twente",
+    "Rangers", "Anderlecht", "Fenerbahçe", "Galatasaray",
+])
+
+
+@app.get("/api/teams-by-competition")
+async def teams_by_competition(competition: str):
+    """
+    GET /api/teams-by-competition?competition={key}
+    Returns [{ name, fc26_club }] sorted alphabetically.
+
+    Keys: premier_league | bundesliga | la_liga | serie_a | ligue_1 | ucl | uel
+    UCL/UEL use hardcoded 2024/25 participant lists.
+    Domestic leagues are read directly from the FC26 CSV.
+    """
+    comp_key = competition.lower().strip()
+
+    if comp_key == "ucl":
+        return [{"name": t, "fc26_club": t} for t in _UCL_2024_25]
+
+    if comp_key == "uel":
+        return [{"name": t, "fc26_club": t} for t in _UEL_2024_25]
+
+    league_name = _COMP_TO_LEAGUE.get(comp_key)
+    if not league_name:
+        raise HTTPException(400, f"Unknown competition key: {competition!r}. "
+                                 f"Valid: {list(_COMP_TO_LEAGUE)} + ucl + uel")
+
+    if FC26_DF.empty:
+        return []
+
+    clubs = (
+        FC26_DF[FC26_DF["league_name"] == league_name]["club_name"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    clubs.sort()
+    return [{"name": c, "fc26_club": c} for c in clubs]
 
 
 @app.get("/api/health")

@@ -2,8 +2,8 @@ import { Link, useLocation } from 'react-router-dom'
 
 const links = [
   { to: '/',        label: 'Leagues' },
-  { to: '/match',   label: 'Match' },
   { to: '/planner', label: 'Planner' },
+  { to: '/match',   label: 'Match' },
 ]
 
 export default function Navbar() {
@@ -14,7 +14,6 @@ export default function Navbar() {
       style={{ background: 'var(--bg-panel)', borderColor: 'rgba(255,255,255,0.06)' }}
     >
       <Link to="/" className="flex items-center gap-2 no-underline">
-        <span className="text-2xl">⚽</span>
         <span
           className="text-xl font-bold tracking-widest uppercase"
           style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--green)' }}

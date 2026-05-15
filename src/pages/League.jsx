@@ -45,7 +45,6 @@ export default function League() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
         <Link to="/" style={{ color: 'var(--muted)', textDecoration: 'none', fontSize: 14 }}>← Leagues</Link>
         <span style={{ color: 'var(--muted)' }}>•</span>
-        <span style={{ fontSize: 28 }}>{meta.flag}</span>
         <h1 style={{ fontFamily: 'Rajdhani', fontSize: 32, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
           {meta.name}
         </h1>
@@ -72,11 +71,9 @@ export default function League() {
             onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)' }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
           >
-            {team.crestUrl ? (
+            {team.crestUrl && (
               <img src={team.crestUrl} alt={team.name} style={{ width: 64, height: 64, objectFit: 'contain' }}
                 onError={e => { e.target.style.display = 'none' }} />
-            ) : (
-              <div style={{ width: 64, height: 64, background: 'rgba(0,255,135,0.08)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>⚽</div>
             )}
             <span style={{ fontFamily: 'Rajdhani', fontWeight: 600, fontSize: 13, color: 'var(--text)', textAlign: 'center', lineHeight: 1.3 }}>
               {team.shortName || team.name}
